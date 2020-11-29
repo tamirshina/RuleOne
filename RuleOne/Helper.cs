@@ -165,6 +165,152 @@ namespace RuleOne
 			}
 			return true;
 		}
+		public static PlanarFace getIntersectionSolidRightFace(Solid intersectionSolid, Face wallFace)
+		{
+			foreach (Face fa in intersectionSolid.Faces)
+			{
+				PlanarFace solidPlanarFace = fa as PlanarFace;
+				PlanarFace wallPlanarFace = wallFace as PlanarFace;
+				if (solidPlanarFace.FaceNormal.IsAlmostEqualTo(wallPlanarFace.FaceNormal))
+				{
+					return solidPlanarFace;
+				}
+			}
+			return null;
+		}
+		public static List<XYZ> getVerticesFromPlanarFace(PlanarFace planarFace)
+		{
+			var bufferInDirection = planarFace.FaceNormal.Multiply(1 / 3);
+			var vertices = planarFace.Triangulate()
+				.Vertices
+				.Select(x => x.Add(bufferInDirection))
+				.ToList();
+			return vertices;
+		}
+		public static Solid TurnWallFaceToSolid(Face face)
+		{
+			PlanarFace wallPlanarFace = face as PlanarFace;
+			var vertices = wallPlanarFace.Triangulate()
+				.Vertices
+				.ToList();
+			try
+			{
+				Solid someSolid = CreateSolidFromVerticesWithCurveLoop((double)1 / 12, vertices, wallPlanarFace.FaceNormal, wallPlanarFace.GetEdgesAsCurveLoops());
+				return someSolid;
+			}
+			catch (Exception exc)
+			{
+				ExceptionFound.Add(exc.ToString() + "-TurnWallFaceToSolid-");
+				return null;
+			}
+
+		}
+		public static Solid TurnElToSolid(Element el, Transform linkedDoc)
+		{
+			Solid solid = null;
+			Transform trans = null;
+			int largestVol = 0;
+
+			try
+			{
+				var geo1 = el.get_Geometry(new Options());
+				var solids = geo1.Where(o => o is Solid);
+				foreach (var g in solids)
+				{
+					Solid s = g as Solid;
+
+					if (s.Volume > largestVol)
+					{
+						solid = s;
+					}
+				}
+				trans = linkedDoc.Inverse;
+			}
+			catch (Exception exc)
+			{
+				ExceptionFound.Add(exc.ToString()
+					);
+			}
+			return SolidUtils.CreateTransformed(solid, trans);
+		}
+		public static Solid CreateSolidFromVertices(double height, List<XYZ> vertices, XYZ direction)
+		{
+			try
+			{
+
+				var edges = new List<Curve>();
+				for (int i = 0; i < vertices.Count - 1; i++)
+				{
+					edges.Add(Line.CreateBound(vertices[i], vertices[i + 1]));
+				}
+				edges.Add(Line.CreateBound(vertices.Last(), vertices.First()));
+				CurveLoop baseLoop = CurveLoop.Create(edges);
+				List<CurveLoop> loopList = new List<CurveLoop>
+				{
+					baseLoop
+				};
+				Solid preTransformBox = GeometryCreationUtilities.CreateExtrusionGeometry(loopList, direction,
+																						  height);
+				Solid transformBox = SolidUtils.CreateTransformed(preTransformBox, Transform.Identity);
+				return transformBox;
+			}
+
+			catch (Exception exc)
+			{
+				ExceptionFound.Add(exc.ToString() + Environment.NewLine);
+				return null;
+			}
+		}
+		public static Solid CreateSolidFromVerticesWithCurveLoop(double height, List<XYZ> vertices, XYZ direction, IList<CurveLoop> loopList)
+		{
+			try
+			{
+				var edges = new List<Curve>();
+				for (int i = 0; i < vertices.Count - 1; i++)
+				{
+					edges.Add(Line.CreateBound(vertices[i], vertices[i + 1]));
+				}
+				edges.Add(Line.CreateBound(vertices.Last(), vertices.First()));
+				Solid preTransformBox = GeometryCreationUtilities.CreateExtrusionGeometry(loopList, direction,
+																						  height);
+				Solid transformBox = SolidUtils.CreateTransformed(preTransformBox, Transform.Identity);
+				return transformBox;
+			}
+			catch (Exception exc)
+			{
+				ExceptionFound.Add(exc.ToString() + Environment.NewLine);
+				return null;
+			}
+
+		}
+		public static List<Face> FindWallNormalFace(Wall wall)
+		{
+			List<Face> normalFaces = new List<Face>();
+
+			Options opt = new Options();
+			opt.ComputeReferences = true;
+			opt.DetailLevel = ViewDetailLevel.Fine;
+
+			GeometryElement e = wall.get_Geometry(opt);
+
+			foreach (GeometryObject obj in e)
+			{
+				Solid solid = obj as Solid;
+
+				if (solid != null && solid.Faces.Size > 0)
+				{
+					foreach (Face face in solid.Faces)
+					{
+						PlanarFace pf = face as PlanarFace;
+						if (!(pf.FaceNormal == new XYZ(0, 0, 1)) || !(pf.FaceNormal == new XYZ(0, 0, -1)))
+						{
+							normalFaces.Add(pf);
+						}
+					}
+				}
+			}
+			return normalFaces;
+		}
 		public static void PaintSolid(Document doc, Solid s, double value)
 		{
 			int schemaId = -1;
