@@ -12,17 +12,28 @@ namespace RuleOne
 	[Transaction(TransactionMode.Manual)]
 	[Regeneration(RegenerationOption.Manual)]
 	public static class Helper
-    {
-		
+	{
+
 		public static void ClearLists()
 		{
 			fireDumpers.Clear();
 			whereIsFD.Clear();
 			ExceptionFound.Clear();
-
+			noFam.Clear();
 			bbIsNull.Clear();
+			ductInstulation.Clear();
 		}
-		public static Transform getTransform(Document doc, string target)
+		public static List<RevitLinkInstance> GetAllLinked(Document doc)
+		{
+			List<RevitLinkInstance> linkedList = new List<RevitLinkInstance>();
+			var models = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance));
+			foreach (var m in models)
+			{
+				linkedList.Add(((RevitLinkInstance)m)); //m as RevitLinkInstance;
+			}
+			return linkedList;
+		}
+		public static Transform GetTransform(Document doc, string target)
 		{
 			var models = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance));
 			foreach (var m in models)
@@ -36,7 +47,7 @@ namespace RuleOne
 			}
 			return null;
 		}
-		public static Document getDocument(Document doc, string target)
+		public static Document GetDocument(Document doc, string target)
 		{
 			var models = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance));
 			foreach (var m in models)
@@ -63,7 +74,24 @@ namespace RuleOne
 
 			foreach (Element ele in elList)
 			{
-				info += ele.Name + " " + "builtincat: " + (BuiltInCategory)ele.Category.Id.IntegerValue + Environment.NewLine;
+				info += ele.Name + " " + ele.Id + "builtincat: " + (BuiltInCategory)ele.Category.Id.IntegerValue + Environment.NewLine;
+			}
+			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
+							+ Environment.NewLine + info + Environment.NewLine);
+		}
+		public static void PrintResultsDuctsFamName(string headline, HashSet<Element> elList)
+		{
+			string info = "";
+
+			string name = "";
+			foreach (Element duct in elList)
+			{
+				if (duct != null)
+				{
+					name = duct.Name;
+					info += name + " " + duct.Id + Environment.NewLine;
+				}
+
 			}
 			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
 							+ Environment.NewLine + info + Environment.NewLine);
@@ -102,21 +130,37 @@ namespace RuleOne
 		{
 			try
 			{
+				string ductName = "";
 				foreach (string str in optionalFamiliesNames)
 				{
-					FamilyInstance fInstance = e as FamilyInstance;
-					FamilySymbol FType = fInstance.Symbol;
-					Family Fam = FType.Family;
+					if (e is FamilyInstance fInstance)
+					{
+						FamilySymbol FType = fInstance.Symbol;
+						Family Fam = FType.Family;
+						ductName = Fam.Name;
+					}
+					else
+					{
+						if (e is Duct duct)
+						{
+							noFam.Add(duct);
+							ductName = duct.DuctType.Name;
+						}
+						else
+						{
+							ductInstulation.Add(e);
+						}
 
+					}
 					foreach (string excludeStr in optionalFamiliesNamesToExclude)
 					{
-						if (Fam.Name.ToLower().Contains(excludeStr))
+						if (ductName.ToLower().Contains(excludeStr))
 						{
 							return false;
 						}
 						else
 						{
-							if (Fam.Name.ToLower().Contains(str))
+							if (ductName.ToLower().Contains(str))
 							{
 								return true;
 							}
@@ -126,12 +170,12 @@ namespace RuleOne
 			}
 			catch (Exception exc)
 			{
-				noFam.Add(e);
+				ExceptionFound.Add(exc.ToString());
 				return false;
 			}
 			return false;
 		}
-		public static bool isHrizontal(Element el)
+		public static bool IsHrizontal(Element el)
 		{
 			//duct.ConnectorManager.Connectors.IsEmpty
 			try
@@ -228,8 +272,7 @@ namespace RuleOne
 			}
 			catch (Exception exc)
 			{
-				ExceptionFound.Add(exc.ToString()
-					);
+				ExceptionFound.Add(exc.ToString());
 			}
 			return SolidUtils.CreateTransformed(solid, trans);
 		}
@@ -389,6 +432,45 @@ namespace RuleOne
 		public static IEnumerable<T> OrEmptyIfNull<T>(this IEnumerable<T> source)
 		{
 			return source ?? Enumerable.Empty<T>();
+		}
+		public static List<FireWallEl> GetAllFireWalls(Document doc)
+		{
+			List<FireWallEl> allFWEl = new List<FireWallEl>();
+
+			IList<Element> linkedElemList = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_RvtLinks).OfClass(typeof(RevitLinkType)).ToElements();
+			foreach (Element e in linkedElemList)
+			{
+				RevitLinkType linkType = e as RevitLinkType;
+
+				foreach (Document linkedDoc in doc.Application.Documents)
+
+				{
+					if ((linkedDoc.Title + ".rvt").Equals(linkType.Name))
+
+					{
+						foreach (Element linkedEl in new FilteredElementCollector(linkedDoc)
+							.OfClass(typeof(Wall)))
+						{
+							if (AssertFrireWall(linkedEl))
+							{
+								allFWEl.Add(new FireWallEl(linkedEl, linkedDoc));
+							}
+						}
+					}
+				}
+			}
+			return allFWEl;
+		}
+		public static void PrintFWList(List<FireWallEl> fWlist)
+		{
+			string exInfo = "";
+			foreach (var el in fWlist)
+			{
+				exInfo += "wall name -" + el.FireWall.Name + " " + "wall ID- " + el.FireWall.Id.ToString() + Environment.NewLine +
+					"fire rating- " + ((Wall)el.FireWall).WallType.get_Parameter(BuiltInParameter.DOOR_FIRE_RATING).AsString() + Environment.NewLine
+					+ "doc title -" + el.WallDoc.Title + Environment.NewLine;
+			}
+			TaskDialog.Show("revit", "count: " + fWlist.Count() + Environment.NewLine + exInfo);
 		}
 	}
 }

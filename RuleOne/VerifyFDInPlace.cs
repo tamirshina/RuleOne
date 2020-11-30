@@ -28,37 +28,86 @@ namespace RuleOne
 		{
 			List<Element> wallsList = new List<Element>();
 
-			Transform mepTransform = getTransform(doc, "MEP");
-			Transform arcTransform = getTransform(doc, "ARC");
-			Transform strTransform = getTransform(doc, "STR");
-			
-			Document arcDoc = getDocument(doc, "ARC");
-			Document strDoc = getDocument(doc, "STR");
-			Document mepDoc = getDocument(doc, "MEP");
+            Transform mepTransform = GetTransform(doc, "MEP");
+            Transform arcTransform = GetTransform(doc, "ARC");
+            Transform strTransform = GetTransform(doc, "STR");
 
-			List<Element> ductList = GetHorizontalDuctsInLinked(doc, mepDoc);
-			foreach (Element e in ductList)
+            Document arcDoc = GetDocument(doc, "ARC");
+            Document strDoc = GetDocument(doc, "STR");
+            Document mepDoc = GetDocument(doc, "MEP");
+
+            List<Element> ductList = GetHorizontalDuctsInLinked(doc, mepDoc);
+            foreach (Element e in ductList)
+            {
+				//NotYetGetIntesectingWalls(e, GetAllLinked(doc), mepTransform, doc);
+                //get ARC intersections 
+                List<Element> tempsList = GetIntesectingWalls(e, arcDoc, arcTransform, mepTransform, doc);
+                foreach (Element el in tempsList)
+                {
+                    wallsList.Add(el);
+                }
+                //get STR intersections 
+                List<Element> tempsListStr = GetIntesectingWalls(e, strDoc, strTransform, mepTransform, doc);
+                foreach (Element el in tempsList)
+                {
+                    wallsList.Add(el);
+                }
+            }
+			PrintResults("fireDumperIntersects", fireDumpers);
+            PrintResults("whereIsFD", whereIsFD);
+			PrintExceptions();
+            ClearLists();
+        }
+		public List<Element> NotYetGetIntesectingWalls(Element elToIntersect, List<RevitLinkInstance> targetDocs, Transform sourceTransform,
+			Document doc)
+		{
+			List<Element> wallsList = new List<Element>();
+
+			foreach (RevitLinkInstance linkedInstance in targetDocs)
 			{
-				//get ARC intersections 
-				List<Element> tempsList = GetIntesectingWalls(e, arcDoc, arcTransform, mepTransform, doc);
-				foreach (Element el in tempsList)
+				try
 				{
-					wallsList.Add(el);
+					var bb = elToIntersect.get_BoundingBox(doc.ActiveView);
+
+					if (bb != null)
+					{
+						var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min, sourceTransform, linkedInstance.GetTotalTransform()),
+																			 TransformPoint(bb.Max, sourceTransform, linkedInstance.GetTotalTransform())));
+
+						FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
+						ElementCategoryFilter willFil = new ElementCategoryFilter(BuiltInCategory.OST_Walls);
+
+						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(willFil).ToList();
+
+						foreach (Element e in intersectsList)
+						{
+							if (AssertFrireWall(e))
+							{
+								if (AssertFireDumper(elToIntersect))
+								{
+									fireDumpers.Add(elToIntersect);
+								}
+								else
+								{
+									FindIntersectionPoint(doc, elToIntersect, e, sourceTransform);
+								}
+							}
+						}
+					}
+					else
+					{
+						bbIsNull.Add(elToIntersect);
+					}
 				}
-				//get STR intersections 
-				List<Element> tempsListStr = GetIntesectingWalls(e, strDoc, strTransform, mepTransform, doc);
-				foreach (Element el in tempsList)
+				catch (Exception exc)
 				{
-					wallsList.Add(el);
+					Exception ex = exc;
 				}
 			}
-			PrintResults("fireDumperIntersects", fireDumpers);
-			PrintResults("whereIsFD", whereIsFD);
-			PrintResults("no fam name", noFam);
-			PrintExceptions();
-			ClearLists();
+			return wallsList;
 		}
-		public List<Element> GetHorizontalDuctsInLinked(Document doc, Document linkedDoc)
+	
+	public List<Element> GetHorizontalDuctsInLinked(Document doc, Document linkedDoc)
 		{
 			List<Element> linkedDucts = new List<Element>();
 
@@ -69,7 +118,7 @@ namespace RuleOne
 			{
 				try
 				{
-					if (isHrizontal(linkedEl))
+					if (IsHrizontal(linkedEl))
 					{
 						linkedDucts.Add(linkedEl);
 					}
@@ -81,6 +130,7 @@ namespace RuleOne
 			}
 			return linkedDucts;
 		}
+
 		private List<Element> GetIntesectingWalls(Element elToIntersect, Document targetDoc,Transform targetTransform,
 			Transform sourceTransform, Document doc)
 		{
@@ -109,7 +159,7 @@ namespace RuleOne
 							}
 							else
 							{
-								findIntersectionPoint(doc, elToIntersect, e, sourceTransform, targetTransform);
+								FindIntersectionPoint(doc, elToIntersect, e, sourceTransform);
 							}
 						}									
 					}
@@ -124,7 +174,7 @@ namespace RuleOne
 			}
 			return wallsList;
 		}
-		public void findIntersectionPoint(Document doc, Element ductEl, Element wallEl, Transform mepModel, Transform wallDoc)
+		public void FindIntersectionPoint(Document doc, Element ductEl, Element wallEl, Transform mepModel)
 		{
 			Wall wall = wallEl as Wall;
 			List<Face> wallNormalFaces = FindWallNormalFace(wall);
@@ -134,6 +184,7 @@ namespace RuleOne
 			{
 				foreach (Face wallFace in wallNormalFaces)
 				{
+
 					var intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(TurnWallFaceToSolid(wallFace),
 						TurnElToSolid(ductEl, mepModel), BooleanOperationsType.Intersect);//check why is the exception.
 
@@ -144,7 +195,7 @@ namespace RuleOne
                         Solid finalSolid = CreateSolidFromVertices((double)(8 / 12 + wall.Width), getVerticesFromPlanarFace(solidPlanarFace),
 							solidPlanarFace.FaceNormal.Negate());
                         //PaintSolid(doc, finalSolid, 1);
-                        FilteredElementCollector collector = new FilteredElementCollector(getDocument(doc, "MEP"));
+                        FilteredElementCollector collector = new FilteredElementCollector(GetDocument(doc, "MEP"));
 
 						collector.WherePasses(new ElementIntersectsSolidFilter(finalSolid));
 

@@ -5,12 +5,20 @@ using System.Text;
 
 namespace RuleOne
 {
-    class FireWallEl
+    public class FireWallEl
     {
+        public FireWallEl(Element fireWall, Document wallDoc)
+        {
+            FireWall = fireWall;
+            WallDoc = wallDoc;
+        }
+
         public Element FireWall
         { get; set; }
 
-        public Transform WallTransform
+        public Document WallDoc
         { get; set; }
+
+
     }
 }

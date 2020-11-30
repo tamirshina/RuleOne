@@ -10,8 +10,9 @@ namespace RuleOne
 	public static class Lists
     {
 		public static List<String> ExceptionFound = new List<string>();
-		public static List<Element> noFam = new List<Element>();
-		public static List<Element> bbIsNull = new List<Element>();
+		public static HashSet<Duct> noFam = new HashSet<Duct>();
+		public static HashSet<Element> bbIsNull = new HashSet<Element>();
+		public static HashSet<Element> ductInstulation = new HashSet<Element>();
 		public static List<Element> fireDumpers = new List<Element>();
 		public static List<Element> whereIsFD = new List<Element>();
 
