@@ -13,7 +13,12 @@ namespace RuleOne
 	[Regeneration(RegenerationOption.Manual)]
 	public static class Helper
 	{
-
+		public static Solid TransformSolid(Transform targetTransform, Transform sourceTransform, Solid solid)
+		{
+			var transform = targetTransform.Multiply(sourceTransform);
+			var solidInTargetModel = SolidUtils.CreateTransformed(solid, transform);
+			return solidInTargetModel;
+		}
 		public static void ClearLists()
 		{
 			fireDumpers.Clear();
@@ -231,7 +236,7 @@ namespace RuleOne
 				.ToList();
 			return vertices;
 		}
-		public static Solid TurnWallFaceToSolid(Face face)
+		public static Solid TurnWallFaceToSolid(Face face, RevitLinkInstance linkedInstance)
 		{
 			PlanarFace wallPlanarFace = face as PlanarFace;
 			var vertices = wallPlanarFace.Triangulate()
@@ -239,7 +244,8 @@ namespace RuleOne
 				.ToList();
 			try
 			{
-				Solid someSolid = CreateSolidFromVerticesWithCurveLoop((double)1 / 12, vertices, wallPlanarFace.FaceNormal, wallPlanarFace.GetEdgesAsCurveLoops());
+				Solid someSolid = CreateSolidFromVerticesWithCurveLoop((double)1 / 12, vertices, wallPlanarFace.FaceNormal,
+					wallPlanarFace.GetEdgesAsCurveLoops(), linkedInstance);
 				return someSolid;
 			}
 			catch (Exception exc)
@@ -249,10 +255,9 @@ namespace RuleOne
 			}
 
 		}
-		public static Solid TurnElToSolid(Element el, Transform linkedDoc)
+		public static Solid TurnElToSolid(Element el, Transform linkedTransform)
 		{
 			Solid solid = null;
-			Transform trans = null;
 			int largestVol = 0;
 
 			try
@@ -268,13 +273,12 @@ namespace RuleOne
 						solid = s;
 					}
 				}
-				trans = linkedDoc.Inverse;
 			}
 			catch (Exception exc)
 			{
 				ExceptionFound.Add(exc.ToString());
 			}
-			return SolidUtils.CreateTransformed(solid, trans);
+			return SolidUtils.CreateTransformed(solid, linkedTransform);
 		}
 		public static Solid CreateSolidFromVertices(double height, List<XYZ> vertices, XYZ direction)
 		{
@@ -304,7 +308,8 @@ namespace RuleOne
 				return null;
 			}
 		}
-		public static Solid CreateSolidFromVerticesWithCurveLoop(double height, List<XYZ> vertices, XYZ direction, IList<CurveLoop> loopList)
+		public static Solid CreateSolidFromVerticesWithCurveLoop(double height, List<XYZ> vertices, XYZ direction,
+			IList<CurveLoop> loopList, RevitLinkInstance linkedInstance)
 		{
 			try
 			{
@@ -316,7 +321,7 @@ namespace RuleOne
 				edges.Add(Line.CreateBound(vertices.Last(), vertices.First()));
 				Solid preTransformBox = GeometryCreationUtilities.CreateExtrusionGeometry(loopList, direction,
 																						  height);
-				Solid transformBox = SolidUtils.CreateTransformed(preTransformBox, Transform.Identity);
+				Solid transformBox = SolidUtils.CreateTransformed(preTransformBox, linkedInstance.GetTransform());
 				return transformBox;
 			}
 			catch (Exception exc)
@@ -472,5 +477,50 @@ namespace RuleOne
 			}
 			TaskDialog.Show("revit", "count: " + fWlist.Count() + Environment.NewLine + exInfo);
 		}
+		//old func 
+		/*private List<Element> GetIntesectingWalls(Element elToIntersect, Document targetDoc, Transform targetTransform,
+		Transform sourceTransform, Document doc)
+		{
+			List<Element> wallsList = new List<Element>();
+			try
+			{
+				var bb = elToIntersect.get_BoundingBox(doc.ActiveView);
+
+				if (bb != null)
+				{
+					var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min, sourceTransform, targetTransform),
+																		 TransformPoint(bb.Max, sourceTransform, targetTransform)));
+
+					FilteredElementCollector collector = new FilteredElementCollector(targetDoc);
+					ElementCategoryFilter willFil = new ElementCategoryFilter(BuiltInCategory.OST_Walls);
+
+					List<Element> intersectsList = collector.WherePasses(filter).WherePasses(willFil).ToList();
+
+					foreach (Element e in intersectsList)
+					{
+						if (AssertFrireWall(e))
+						{
+							if (AssertFireDumper(elToIntersect))
+							{
+								fireDumpers.Add(elToIntersect);
+							}
+							else
+							{
+								FindIntersectionPoint(doc, elToIntersect, e, sourceTransform);
+							}
+						}
+					}
+				}
+				else
+				{
+					bbIsNull.Add(elToIntersect);
+				}
+			}
+			catch (Exception exc)
+			{
+				Exception ex = exc;
+			}
+			return wallsList;
+		}*/
 	}
 }
