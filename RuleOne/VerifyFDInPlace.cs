@@ -22,11 +22,11 @@ namespace RuleOne
 
 			FinalFunc(doc);
 
+
 			return Result.Succeeded;
         }
 		public void FinalFunc(Document doc)
 		{
-			List<Element> wallsList = new List<Element>();
 
             Transform mepTransform = GetTransform(doc, "MEP");
 
@@ -37,10 +37,13 @@ namespace RuleOne
             {
 				GetIntesectingWalls(e, GetAllLinked(doc), mepTransform, doc);
             }
-			PrintResults("fireDumperIntersects", fireDumpers);
+            PrintResults("fireDumperIntersects", fireDumpers);
             PrintResults("whereIsFD", whereIsFD);
+            PrintResults("fire dunmper from intersection", fireDumpersFromIntersection);
+            PrintResults("AssertMetalBeam", structuralFraming);
 			PrintExceptions();
-            ClearLists();
+			
+			ClearLists();
         }
 		public List<Element> GetIntesectingWalls(Element elToIntersect, List<RevitLinkInstance> targetDocs, Transform mepTransform,
 			Document doc)
@@ -51,7 +54,7 @@ namespace RuleOne
 			{
 				try
 				{
-					var bb = elToIntersect.get_BoundingBox(doc.ActiveView);
+					var bb = elToIntersect.get_BoundingBox(null);
 
 					if (bb != null)
 					{
@@ -60,19 +63,30 @@ namespace RuleOne
 
 						FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
 
-						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementCategoryFilter(BuiltInCategory.OST_Walls)).ToList();
+						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementMulticategoryFilter(filterBuiltInCats)).ToList();
 
-						foreach (Element e in intersectsList)
+						foreach (Element e in intersectsList)//Maybe we need to check there are no duplicated ID's in here. 
 						{
+							if (AssertMetalBeam(e))
+							{
+								structuralFraming.Add(e);
+							}
 							if (AssertFrireWall(e))
 							{
 								if (AssertFireDumper(elToIntersect))
 								{
 									fireDumpers.Add(elToIntersect);
+									break;
 								}
 								else
 								{
-									FindIntersectionPoint(doc, elToIntersect, e, mepTransform, linkedInstance);
+									if (!IsFireDumperInIntersection(doc, elToIntersect, e, mepTransform, linkedInstance))
+									{
+										if (AssertMetalBeam(e))
+										{
+
+										}
+									}									
 								}
 							}
 						}
@@ -89,7 +103,7 @@ namespace RuleOne
 			}
 			return wallsList;
 		}
-		public void FindIntersectionPoint(Document doc, Element ductEl, Element wallEl, Transform mepTransform, RevitLinkInstance linkedInstance)
+		public bool IsFireDumperInIntersection(Document doc, Element ductEl, Element wallEl, Transform mepTransform, RevitLinkInstance linkedInstance)
 		{
 			Wall wall = wallEl as Wall;
 			List<Face> wallNormalFaces = FindWallNormalFace(wall);
@@ -120,19 +134,24 @@ namespace RuleOne
 							if (AssertFireDumper(element))
 							{
 								isFD = true;
+								fireDumpersFromIntersection.Add(element);
+								return true;
 							}
 						}
 						if (!isFD)
 						{
 							whereIsFD.Add(wallEl);
+							return false;
 						}
 						break;
 					}
 				}
+				return false;
 			}
 			catch (Exception exc)
 			{
 				ExceptionFound.Add(exc.ToString());
+				return false;
 			}
 		}
 		public List<Element> GetHorizontalDuctsInLinked(Document linkedDoc)

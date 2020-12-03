@@ -13,6 +13,18 @@ namespace RuleOne
 	[Regeneration(RegenerationOption.Manual)]
 	public static class Helper
 	{
+		public static bool AssertMetalBeam(Element el)
+		{
+			BuiltInCategory bipFraming = BuiltInCategory.OST_StructuralFraming;
+			BuiltInCategory elCat = (BuiltInCategory)el.Category.Id.IntegerValue;
+			if (bipFraming.Equals(elCat))
+			{
+				structuralFraming.Add(el);
+				return true;
+			}
+
+				return false;
+		}
 		public static Solid TransformSolid(Transform targetTransform, Transform sourceTransform, Solid solid)
 		{
 			var transform = targetTransform.Multiply(sourceTransform);
@@ -25,7 +37,7 @@ namespace RuleOne
 			whereIsFD.Clear();
 			ExceptionFound.Clear();
 			noFam.Clear();
-			bbIsNull.Clear();
+			//bbIsNull.Clear();
 			ductInstulation.Clear();
 		}
 		public static List<RevitLinkInstance> GetAllLinked(Document doc)
@@ -43,7 +55,7 @@ namespace RuleOne
 			var models = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance));
 			foreach (var m in models)
 			{
-				var linkedModel = ((RevitLinkInstance)m); //m as RevitLinkInstance;
+				var linkedModel = ((RevitLinkInstance)m);
 				var tempDoc = linkedModel.GetLinkDocument();
 				if (tempDoc.Title.Contains(target))
 				{
@@ -84,17 +96,39 @@ namespace RuleOne
 			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
 							+ Environment.NewLine + info + Environment.NewLine);
 		}
-		public static void PrintResultsDuctsFamName(string headline, HashSet<Element> elList)
+		public static void PrintResults(string headline, List<BuiltInCategory> elList)
 		{
 			string info = "";
 
+			foreach (BuiltInCategory ele in elList)
+			{
+				info +=  "builtincat: " + ele.ToString() + Environment.NewLine;
+			}
+			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
+							+ Environment.NewLine + info + Environment.NewLine);
+		}
+		public static void PrintResults(string headline, List<string> elList)
+		{
+			string info = "";
+
+			foreach (string ele in elList)
+			{
+				info +=  ele + Environment.NewLine;
+			}
+			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
+							+ Environment.NewLine + info + Environment.NewLine);
+		}
+		public static void PrintResultsHaseSet(string headline, HashSet<Element> elList)
+		{
+			string info = "";
 			string name = "";
+
 			foreach (Element duct in elList)
 			{
 				if (duct != null)
 				{
 					name = duct.Name;
-					info += name + " " + duct.Id + Environment.NewLine;
+					info += name + " " + duct.Id + "catagory"  + " " + (BuiltInCategory)duct.Category.Id.IntegerValue +  Environment.NewLine;
 				}
 
 			}
@@ -284,7 +318,6 @@ namespace RuleOne
 		{
 			try
 			{
-
 				var edges = new List<Curve>();
 				for (int i = 0; i < vertices.Count - 1; i++)
 				{
@@ -329,7 +362,6 @@ namespace RuleOne
 				ExceptionFound.Add(exc.ToString() + Environment.NewLine);
 				return null;
 			}
-
 		}
 		public static List<Face> FindWallNormalFace(Wall wall)
 		{
