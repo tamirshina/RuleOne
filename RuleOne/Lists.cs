@@ -16,8 +16,9 @@ namespace RuleOne
 		public static HashSet<Element> ductInstulation = new HashSet<Element>();
 		public static List<Element> fireDumpers = new List<Element>();
 		public static List<Element> fireDumpersFromIntersection = new List<Element>();
-		public static List<Element> whereIsFD = new List<Element>();
+		public static HashSet<Element> whereIsFD = new HashSet<Element>();
 		public static List<Element> structuralFraming = new List<Element>();
+		public static List<Element> generalElList = new List<Element>();
 		public static List<BuiltInCategory> allCatagories = new List<BuiltInCategory>();
 
 		public static List<string> optionList = new List<string>{"Firecase Column", "Fire Rated", "Fireline", "Fire Rated Wall",
@@ -27,7 +28,7 @@ namespace RuleOne
 			"F/R Partition", "F/R Shaft","F/R Barrier", "FireWall", "FR", "F/R","Fire Rated" };
 
 		static public List<BuiltInCategory> ductsBuiltInCats = new List<BuiltInCategory>(){BuiltInCategory.OST_DuctCurves, BuiltInCategory.OST_DuctFitting,
-			BuiltInCategory.OST_DuctAccessory, BuiltInCategory.OST_FlexDuctTags, BuiltInCategory.OST_DuctTags};
+			BuiltInCategory.OST_DuctAccessory, BuiltInCategory.OST_FlexDuctTags, BuiltInCategory.OST_DuctTags, BuiltInCategory.OST_DuctInsulations};
 		static public List<BuiltInCategory> customBuiltInCats = new List<BuiltInCategory>(){BuiltInCategory.OST_DuctCurves};
 		static public List<BuiltInCategory> filterBuiltInCats = new List<BuiltInCategory>() { BuiltInCategory.OST_Walls, BuiltInCategory.OST_StructuralFraming };
 		static public readonly string[] optionalFamiliesNames =

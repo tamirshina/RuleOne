@@ -7,6 +7,7 @@ namespace RuleOne
     using System.Linq;
     using Autodesk.Revit.Attributes;
     using Autodesk.Revit.DB;
+    using Autodesk.Revit.DB.Mechanical;
     using Autodesk.Revit.UI;
 	using static RuleOne.Helper;
 	using static RuleOne.Lists;
@@ -21,7 +22,6 @@ namespace RuleOne
 			Document doc = uiDoc.Document;
 
 			FinalFunc(doc);
-
 
 			return Result.Succeeded;
         }
@@ -42,14 +42,23 @@ namespace RuleOne
 							{
 								if (!IsFireDumperInIntersection(doc, ductEl, ele))
 								{
-									whereIsFD.Add(ele);
+									if (ElementIsNotInTheList(ele))
+									{
+										whereIsFD.Add(ele);
+									}
 								}
 							}
 							if (AssertMetalBeam(ele))
 							{
-								if (IsMetalBeamIntersectsFW(doc, ele))
+								if (IsMetalBeamIntersectsFW	(doc, ele))
 								{
-
+									if (!IsFireDumperIntersectDuctSolid(doc, ductEl))
+									{
+										if (ElementIsNotInTheList(ele))
+										{
+											whereIsFD.Add(ele);
+										}
+									}
 								}								
 							}							
 						}
@@ -64,15 +73,46 @@ namespace RuleOne
 					ExceptionFound.Add(exc.ToString());
 				}
 			}
-				//PrintResults("fireDumper", fireDumpers);
 				PrintResults("whereIsFD", whereIsFD);
-				PrintResults("fire dunmper from intersection", fireDumpersFromIntersection);
-				PrintResults("AssertMetalBeam", structuralFraming);
 				PrintExceptions();
 
 				ClearLists(); 		
         }
-		public HashSet<Element> GetIntesectingElements(Document doc, Element elToIntersect)
+
+        private bool ElementIsNotInTheList(Element ele)
+        {
+			foreach (ElementId id in GetIdsFromEls(whereIsFD))
+			{
+				if (ele.Id.Equals(id))
+				{
+					return false;
+				}
+			}
+			return true;		
+		}
+
+        private bool IsFireDumperIntersectDuctSolid(Document doc, Element ductEl)
+        {
+			try
+			{
+				Solid ductSolid = TurnElToSolid(ductEl, GetTransform(doc, ductEl.Document.Title));
+				Solid ductScaled = ScaleSolidInPlace(ductSolid, (double)1.25);
+				
+				foreach (Element ele in GetIntesectingElements(doc, ductSolid))
+				{
+					if (AssertFireDumper(ele))
+					{
+						return true;
+					}
+				}
+			}
+			catch (Exception exc)
+			{
+				ExceptionFound.Add(exc.ToString());
+			}
+			return false;
+        }
+        public HashSet<Element> GetIntesectingElements(Document doc, Element elToIntersect)
 		{
 			HashSet<Element> elementList = new HashSet<Element>();
 
@@ -141,6 +181,7 @@ namespace RuleOne
 			try
 			{
 				Solid beamSolid = TurnElToSolid(strucualBeam, GetTransform(doc, strucualBeam.Document.Title));
+				//PaintSolid(doc, beamSolid, 1);
 				PlanarFace face = GetBottomFaceOfSolid(doc, beamSolid);
 				List<XYZ> vertices = getVerticesFromPlanarFace(face, 1);
 				Solid faceSolid = CreateSolidFromVertices((double)1 / 3, vertices, -XYZ.BasisZ);
@@ -152,7 +193,7 @@ namespace RuleOne
 						var intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(faceSolid, TurnElToSolid(ele, GetTransform(doc, ele.Document.Title)), BooleanOperationsType.Intersect);
 						if (intersectionSolid.Volume > 0)
 						{
-							TaskDialog.Show("revi", "yes");
+							return true;
 						}						
 						return true;
 					}
@@ -195,10 +236,14 @@ namespace RuleOne
 				{
 
 					var intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(TurnWallFaceToSolid(wallFace, linkedInstance),
-						TurnElToSolid(ductEl, mepTransform), BooleanOperationsType.Intersect);//check why is the exception.
+						TurnElToSolid(ductEl, mepTransform), BooleanOperationsType.Intersect);
 
 					if (intersectionSolid.Volume > 0)
 					{
+						if (ductEl.Id.ToString() == "135902")
+						{
+							string shina = "any";
+						}
 						PlanarFace solidPlanarFace = getIntersectionSolidRightFace(intersectionSolid, wallFace);
 
 						Solid finalSolid = CreateSolidFromVertices((double)(8 / 12 + wall.Width), getVerticesFromPlanarFace(solidPlanarFace, 1/3),
@@ -229,7 +274,7 @@ namespace RuleOne
 			}
 			catch (Exception exc)
 			{
-				ExceptionFound.Add(exc.ToString());
+				ExceptionFound.Add(exc.ToString() + " " + ductEl.Id.ToString());
 				return false;
 			}
 		}
@@ -256,8 +301,6 @@ namespace RuleOne
 			}
 			return linkedDucts;
 		}
-		
-
 
 	}
 }

@@ -19,7 +19,6 @@ namespace RuleOne
 			BuiltInCategory elCat = (BuiltInCategory)el.Category.Id.IntegerValue;
 			if (bipFraming.Equals(elCat))
 			{
-				structuralFraming.Add(el);
 				return true;
 			}
 
@@ -37,7 +36,7 @@ namespace RuleOne
 			whereIsFD.Clear();
 			ExceptionFound.Clear();
 			noFam.Clear();
-			//bbIsNull.Clear();
+			bbIsNull.Clear();
 			ductInstulation.Clear();
 		}
 		public static List<RevitLinkInstance> GetAllLinked(Document doc)
@@ -78,6 +77,22 @@ namespace RuleOne
 			}
 			return null;
 		}
+		public static Solid ScaleSolidInPlace(Solid original, double scale)
+		{
+			try
+			{
+				var center = original.ComputeCentroid();
+				var translation = Transform.CreateTranslation(center);
+				var scaling = translation.Inverse.ScaleBasisAndOrigin(scale);
+				var solid2 = SolidUtils.CreateTransformed(original, scaling);
+				return SolidUtils.CreateTransformed(solid2, translation);
+			}
+			catch(Exception exc)
+			{
+				ExceptionFound.Add(exc.ToString());
+				return null;
+			}
+		}
 		public static RevitLinkInstance GetRevitLinkedInstance(Document doc, string target)
 		{
 			var models = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance));
@@ -105,7 +120,7 @@ namespace RuleOne
 
 			foreach (Element ele in elList)
 			{
-				info += ele.Name + " " + ele.Id + "builtincat: " + (BuiltInCategory)ele.Category.Id.IntegerValue + Environment.NewLine;
+				info += ele.Name + " " + ele.Id + " " + "builtincat: " + (BuiltInCategory)ele.Category.Id.IntegerValue + Environment.NewLine;
 			}
 			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
 							+ Environment.NewLine + info + Environment.NewLine);
@@ -132,7 +147,7 @@ namespace RuleOne
 			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
 							+ Environment.NewLine + info + Environment.NewLine);
 		}
-		public static void PrintResultsHaseSet(string headline, HashSet<Element> elList)
+		public static void PrintResults(string headline, HashSet<Element> elList)
 		{
 			string info = "";
 			string name = "";
@@ -142,7 +157,7 @@ namespace RuleOne
 				if (duct != null)
 				{
 					name = duct.Name;
-					info += name + " " + duct.Id + "catagory"  + " " + (BuiltInCategory)duct.Category.Id.IntegerValue +  Environment.NewLine;
+					info += name + " " + duct.Id + "  " + "catagory"  + " " + (BuiltInCategory)duct.Category.Id.IntegerValue +  Environment.NewLine;
 				}
 
 			}
@@ -496,9 +511,7 @@ namespace RuleOne
 			try
 			{
 				Solid solidOne = TurnElToSolid(eleOne, GetTransform(doc, eleOne.Document.Title));
-				PaintSolid(doc, solidOne, 1);
 				Solid solidTwo = TurnElToSolid(eleTwo, GetTransform(doc, eleTwo.Document.Title));
-				PaintSolid(doc, solidTwo, 2);
 				var intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(solidOne, solidTwo, BooleanOperationsType.Intersect);
 
 				if (intersectionSolid.Volume > 0)
@@ -552,7 +565,7 @@ namespace RuleOne
 		{
 			try
 			{
-				PrintResultsHaseSet("no BB", bbIsNull);
+				PrintResults("no BB", bbIsNull);
 				var view = uiDoc.ActiveView as View3D;
 				using var tran = new Transaction(doc, "Test");
 				tran.Start();
@@ -564,6 +577,15 @@ namespace RuleOne
 
 		}
 		public static ICollection<ElementId> GetIdsFromEls(List<Element> elList)
+		{
+			ICollection<ElementId> listOfIds = new List<ElementId>();
+			foreach (Element el in elList)
+			{
+				listOfIds.Add(el.Id);
+			}
+			return listOfIds;
+		}
+		public static ICollection<ElementId> GetIdsFromEls(HashSet<Element> elList)
 		{
 			ICollection<ElementId> listOfIds = new List<ElementId>();
 			foreach (Element el in elList)
@@ -658,7 +680,7 @@ namespace RuleOne
 			}
 			catch (Exception exc)
 			{
-				ExceptionFound.Add(exc.ToString());
+				ExceptionFound.Add(exc.ToString() + " " + wallEl.Id.ToString());
 				return false;
 			}
 		}
