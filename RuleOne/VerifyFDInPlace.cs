@@ -107,7 +107,7 @@ namespace RuleOne
 				Solid beamSolid = TurnElToSolid(strucualBeam, GetTransform(doc, strucualBeam.Document.Title));
 				//PaintSolid(doc, beamSolid, 1);
 				PlanarFace face = GetBottomFaceOfSolid(doc, beamSolid);
-				List<XYZ> vertices = getVerticesFromPlanarFace(face, 1);
+				List<XYZ> vertices = GetVerticesFromPlanarFace(face, 1);
 				Solid faceSolid = CreateSolidFromVertices((double)1 / 3, vertices, -XYZ.BasisZ);
 
 				foreach (Element ele in GetIntesectingElements(doc, faceSolid))
@@ -149,6 +149,7 @@ namespace RuleOne
 		public bool IsFireDumperInIntersection(Document doc, Element ductEl, Element wallEl)
 		{
 			Transform mepTransform = GetTransform(doc, ductEl.Document.Title);
+			Solid ductSolid = TurnElToSolid(ductEl, mepTransform);
 			RevitLinkInstance linkedInstance = GetRevitLinkedInstance(doc, wallEl.Document.Title); 
 			Wall wall = wallEl as Wall;
 			List<Face> wallNormalFaces = FindWallNormalFace(wall);
@@ -159,9 +160,7 @@ namespace RuleOne
 				foreach (Face wallFace in wallNormalFaces)
 				{
 					try
-					{
-						Solid ductSolid = TurnElToSolid(ductEl, mepTransform);
-						
+					{	
 						Solid wallFaceSolid = TurnWallFaceToSolid(wallFace, linkedInstance);
 						intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(wallFaceSolid, ductSolid, BooleanOperationsType.Intersect);
 					}
@@ -172,36 +171,46 @@ namespace RuleOne
 						{
 							return true;
 						}
-						else { return false; }
-						
+						else { return false; }						
 					}
 
 					if (intersectionSolid.Volume > 0)
 					{
-						PlanarFace solidPlanarFace = getIntersectionSolidRightFace(intersectionSolid, wallFace);
 
-						Solid finalSolid = CreateSolidFromVertices((double)(8 / 12 + wall.Width), getVerticesFromPlanarFace(solidPlanarFace, 1/3),
-							solidPlanarFace.FaceNormal.Negate());
-						Solid finalSolidInStrcModel = TransformSolid(linkedInstance.GetTransform(), Transform.Identity, finalSolid);
-						//PaintSolid(doc, finalSolid, 1);
-						FilteredElementCollector collector = new FilteredElementCollector(GetDocument(doc, "MEP"));
-
-						collector.WherePasses(new ElementIntersectsSolidFilter(finalSolidInStrcModel));
-
-						foreach (Element element in collector)
+						PlanarFace solidPlanarFace = GetIntersectionSolidRightFace(intersectionSolid, wallFace);
+						if (solidPlanarFace != null)
 						{
-							if (AssertFireDumper(element))
+							Solid finalSolid = CreateSolidFromVertices((double)(8 / 12 + wall.Width), GetVerticesFromPlanarFace(solidPlanarFace, 1 / 3),
+	solidPlanarFace.FaceNormal.Negate());
+							Solid finalSolidInStrcModel = TransformSolid(linkedInstance.GetTransform(), Transform.Identity, finalSolid);
+
+							FilteredElementCollector collector = new FilteredElementCollector(GetDocument(doc, "MEP"));
+
+							collector.WherePasses(new ElementIntersectsSolidFilter(finalSolidInStrcModel));
+
+							foreach (Element element in collector)
 							{
-								isFD = true;
-								fireDumpersFromIntersection.Add(element);
+								if (AssertFireDumper(element))
+								{
+									isFD = true;
+									fireDumpersFromIntersection.Add(element);
+									return true;
+								}
+							}
+							if (!isFD)
+							{
+								return false;
+							}
+							break;
+						}
+						else
+						{
+							if (CheckIsFDWithScaledBB(doc, ductEl))
+							{
 								return true;
 							}
+							else { return false; }
 						}
-						if (!isFD)
-						{
-							return false;
-						}
-						break;
 					}
 				}
 				return false;
@@ -211,7 +220,7 @@ namespace RuleOne
 				ExceptionFound.Add(exc.ToString() + " " + ductEl.Id.ToString());
 				return false;
 			}
-		} 
+		}
         private bool CheckIsFDWithScaledBB(Document doc, Element el)
         {
 			var buffer = new XYZ((double)1/2, (double)1 / 2, (double)1 / 2);

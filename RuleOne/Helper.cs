@@ -363,20 +363,30 @@ namespace RuleOne
 			}
 			return true;
 		}
-		public static PlanarFace getIntersectionSolidRightFace(Solid intersectionSolid, Face wallFace)
+		public static PlanarFace GetIntersectionSolidRightFace(Solid intersectionSolid, Face wallFace)
 		{
+			PlanarFace wallPlanarFace = wallFace as PlanarFace;
+
 			foreach (Face fa in intersectionSolid.Faces)
 			{
-				PlanarFace solidPlanarFace = fa as PlanarFace;
-				PlanarFace wallPlanarFace = wallFace as PlanarFace;
-				if (solidPlanarFace.FaceNormal.IsAlmostEqualTo(wallPlanarFace.FaceNormal))
+				try
 				{
-					return solidPlanarFace;
+					PlanarFace solidPlanarFace = fa as PlanarFace;
+
+					if (solidPlanarFace != null && solidPlanarFace.FaceNormal.IsAlmostEqualTo(wallPlanarFace.FaceNormal))
+					{
+						return solidPlanarFace;
+					}
+				}
+				catch (Exception exc)
+				{
+					ExceptionFound.Add(exc.ToString());
+					continue;
 				}
 			}
 			return null;
 		}
-		public static List<XYZ> getVerticesFromPlanarFace(PlanarFace planarFace, int buffer)
+		public static List<XYZ> GetVerticesFromPlanarFace(PlanarFace planarFace, int buffer)
 		{
 			var bufferInDirection = planarFace.FaceNormal.Multiply(buffer);
 			var vertices = planarFace.Triangulate()
@@ -497,7 +507,7 @@ namespace RuleOne
 					foreach (Face face in solid.Faces)
 					{
 						PlanarFace pf = face as PlanarFace;
-						if (!(pf.FaceNormal == new XYZ(0, 0, 1)) || !(pf.FaceNormal == new XYZ(0, 0, -1)))
+						if (!(pf.FaceNormal == new XYZ(0, 0, 1)) && !(pf.FaceNormal == new XYZ(0, 0, -1)))
 						{
 							normalFaces.Add(pf);
 						}
@@ -572,126 +582,6 @@ namespace RuleOne
 			AnalysisDisplayStyle analysisDisplayStyle = AnalysisDisplayStyle.CreateAnalysisDisplayStyle(doc, "Paint Solid-" + rnd.Next(), coloredSurfaceSettings, colorSettings, legendSettings);
 			view.AnalysisDisplayStyleId = analysisDisplayStyle.Id;
 		}
-		public static void PrintExceptions()
-		{
-			string exInfo = "";
-			foreach (string str in ExceptionFound)
-			{
-				exInfo += str + " " + Environment.NewLine + Environment.NewLine;
-			}
-			TaskDialog.Show("revit", "count: " + ExceptionFound.Count() + Environment.NewLine + exInfo);
-		}
-		//Not in use at the moment
-		public static void PrintResults(string headline, List<Element> elList)
-		{
-			string info = "";
-
-			foreach (Element ele in elList)
-			{
-				info += ele.Name + " " + ele.Id + " " + "builtincat: " + (BuiltInCategory)ele.Category.Id.IntegerValue + Environment.NewLine;
-			}
-			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
-							+ Environment.NewLine + info + Environment.NewLine);
-		}
-		public static void PrintResults(string headline, List<BuiltInCategory> elList)
-		{
-			string info = "";
-
-			foreach (BuiltInCategory ele in elList)
-			{
-				info += "builtincat: " + ele.ToString() + Environment.NewLine;
-			}
-			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
-							+ Environment.NewLine + info + Environment.NewLine);
-		}
-		public static void PrintResults(string headline, List<string> elList)
-		{
-			string info = "";
-
-			foreach (string ele in elList)
-			{
-				info += ele + Environment.NewLine;
-			}
-			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
-							+ Environment.NewLine + info + Environment.NewLine);
-		}
-		public static bool CheckIntersectionWithSolids(Document doc, Element eleOne, Element eleTwo)
-		{
-			try
-			{
-				Solid solidOne = TurnElToSolid(eleOne, GetTransform(doc, eleOne.Document.Title));
-				Solid solidTwo = TurnElToSolid(eleTwo, GetTransform(doc, eleTwo.Document.Title));
-				var intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(solidOne, solidTwo, BooleanOperationsType.Intersect);
-
-				if (intersectionSolid.Volume > 0)
-				{
-					return true;
-				}
-			}
-			catch (Exception exc)
-			{
-				ExceptionFound.Add(exc.ToString());
-			}
-			return false;
-		}
-		public static void SeeNoBBEl(UIDocument uiDoc, Document doc)
-		{
-			List<Element> noBBList = GetNoBBInHost(doc);
-			SelectIds(uiDoc, doc, GetIdsFromEls(noBBList));
-
-		}
-		public static List<Element> GetNoBBInHost(Document doc)
-		{
-			List<Element> hostDucts = new List<Element>();
-			ElementMulticategoryFilter ductFilter = new ElementMulticategoryFilter(customBuiltInCats);
-
-			foreach (Element el in new FilteredElementCollector(doc)
-			.WherePasses(ductFilter))
-			{
-				try
-				{
-					if (IsHrizontal(el))
-					{
-						var bb = el.get_BoundingBox(null);
-						hostDucts.Add(el);
-						if (bb == null)
-						{
-
-							bbIsNull.Add(el);
-						}
-					}
-				}
-				catch (Exception exc)
-				{
-					ExceptionFound.Add(exc.ToString());
-				}
-			}
-			return hostDucts;
-		}
-		public static void SelectIds(UIDocument uiDoc, Document doc, ICollection<ElementId> idList)
-		{
-			try
-			{
-				PrintResults("no BB", bbIsNull);
-				var view = uiDoc.ActiveView as View3D;
-				using var tran = new Transaction(doc, "Test");
-				tran.Start();
-				view.HideElements(idList);
-				tran.Commit();
-			}
-			catch (Exception e)
-			{ TaskDialog.Show("revit", e.Message); }
-
-		}
-		public static ICollection<ElementId> GetIdsFromEls(List<Element> elList)
-		{
-			ICollection<ElementId> listOfIds = new List<ElementId>();
-			foreach (Element el in elList)
-			{
-				listOfIds.Add(el.Id);
-			}
-			return listOfIds;
-		}
 		public static ICollection<ElementId> GetIdsFromEls(HashSet<Element> elList)
 		{
 			ICollection<ElementId> listOfIds = new List<ElementId>();
@@ -701,95 +591,14 @@ namespace RuleOne
 			}
 			return listOfIds;
 		}
-		public static List<FireWallEl> GetAllFireWalls(Document doc)
-		{
-			List<FireWallEl> allFWEl = new List<FireWallEl>();
-
-			IList<Element> linkedElemList = new FilteredElementCollector(doc).OfCategory(BuiltInCategory.OST_RvtLinks).OfClass(typeof(RevitLinkType)).ToElements();
-			foreach (Element e in linkedElemList)
-			{
-				RevitLinkType linkType = e as RevitLinkType;
-
-				foreach (Document linkedDoc in doc.Application.Documents)
-
-				{
-					if ((linkedDoc.Title + ".rvt").Equals(linkType.Name))
-
-					{
-						foreach (Element linkedEl in new FilteredElementCollector(linkedDoc)
-							.OfClass(typeof(Wall)))
-						{
-							if (AssertFrireWall(linkedEl))
-							{
-								allFWEl.Add(new FireWallEl(linkedEl, linkedDoc));
-							}
-						}
-					}
-				}
-			}
-			return allFWEl;
-		}
-		public static void PrintFWList(List<FireWallEl> fWlist)
+		public static void PrintExceptions()
 		{
 			string exInfo = "";
-			foreach (var el in fWlist)
+			foreach (string str in ExceptionFound)
 			{
-				exInfo += "wall name -" + el.FireWall.Name + " " + "wall ID- " + el.FireWall.Id.ToString() + Environment.NewLine +
-					"fire rating- " + ((Wall)el.FireWall).WallType.get_Parameter(BuiltInParameter.DOOR_FIRE_RATING).AsString() + Environment.NewLine
-					+ "doc title -" + el.WallDoc.Title + Environment.NewLine;
+				exInfo += str + " " + Environment.NewLine + Environment.NewLine;
 			}
-			TaskDialog.Show("revit", "count: " + fWlist.Count() + Environment.NewLine + exInfo);
-		}
-		public static bool IsFireDumperInIntersection(Document doc, Element ductEl, Element wallEl, Transform mepTransform, RevitLinkInstance linkedInstance)
-		{
-			Wall wall = wallEl as Wall;
-			List<Face> wallNormalFaces = FindWallNormalFace(wall);
-			bool isFD = false;
-
-			try
-			{
-				foreach (Face wallFace in wallNormalFaces)
-				{
-
-					var intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(TurnWallFaceToSolid(wallFace, linkedInstance),
-						TurnElToSolid(ductEl, mepTransform), BooleanOperationsType.Intersect);//check why is the exception.
-
-					if (intersectionSolid.Volume > 0)
-					{
-						PlanarFace solidPlanarFace = getIntersectionSolidRightFace(intersectionSolid, wallFace);
-
-						Solid finalSolid = CreateSolidFromVertices((double)(8 / 12 + wall.Width), getVerticesFromPlanarFace(solidPlanarFace, 1 / 3),
-							solidPlanarFace.FaceNormal.Negate());
-						Solid finalSolidInStrcModel = TransformSolid(linkedInstance.GetTransform(), Transform.Identity, finalSolid);
-						//PaintSolid(doc, finalSolid, 1);
-						FilteredElementCollector collector = new FilteredElementCollector(GetDocument(doc, "MEP"));
-
-						collector.WherePasses(new ElementIntersectsSolidFilter(finalSolidInStrcModel));
-
-						foreach (Element element in collector)
-						{
-							if (AssertFireDumper(element))
-							{
-								isFD = true;
-								fireDumpersFromIntersection.Add(element);
-								return true;
-							}
-						}
-						if (!isFD)
-						{
-							whereIsFD.Add(wallEl);
-							return false;
-						}
-						break;
-					}
-				}
-				return false;
-			}
-			catch (Exception exc)
-			{
-				ExceptionFound.Add(exc.ToString() + " " + wallEl.Id.ToString());
-				return false;
-			}
+			TaskDialog.Show("revit", "count: " + ExceptionFound.Count() + Environment.NewLine + exInfo);
 		}
 	}
 }
