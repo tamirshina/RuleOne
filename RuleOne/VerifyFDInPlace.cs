@@ -42,6 +42,7 @@ namespace RuleOne
 							{
 								if (!IsFireDumperInIntersection(doc, ductEl, ele))
 								{
+									//check for duplicates 
 									if (ElementIsNotInTheList(ele))
 									{
 										whereIsFD.Add(ele);
@@ -78,19 +79,6 @@ namespace RuleOne
 
 				ClearLists(); 		
         }
-
-        private bool ElementIsNotInTheList(Element ele)
-        {
-			foreach (ElementId id in GetIdsFromEls(whereIsFD))
-			{
-				if (ele.Id.Equals(id))
-				{
-					return false;
-				}
-			}
-			return true;		
-		}
-
         private bool IsFireDumperIntersectDuctSolid(Document doc, Element ductEl)
         {
 			try
@@ -112,70 +100,6 @@ namespace RuleOne
 			}
 			return false;
         }
-        public HashSet<Element> GetIntesectingElements(Document doc, Element elToIntersect)
-		{
-			HashSet<Element> elementList = new HashSet<Element>();
-
-			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
-			{
-				try
-				{
-					var bb = elToIntersect.get_BoundingBox(null);
-
-					if (bb != null)
-					{
-						var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min, GetTransform(doc,elToIntersect.Document.Title),
-							linkedInstance.GetTotalTransform()),TransformPoint(bb.Max, GetTransform(doc, elToIntersect.Document.Title),
-							linkedInstance.GetTotalTransform())));
-
-						FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
-
-						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementMulticategoryFilter(filterBuiltInCats)).ToList();
-
-						foreach (Element intersectionEl in intersectsList)
-						{
-							elementList.Add(intersectionEl);
-						}
-					}
-				}
-				catch (Exception exc)
-				{
-					ExceptionFound.Add(exc.ToString());
-				}
-			}
-			return elementList;
-		}
-		public HashSet<Element> GetIntesectingElements(Document doc, Solid solidToIntersect)
-		{
-			HashSet<Element> elementList = new HashSet<Element>();
-
-			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
-			{
-				try
-				{
-					Transform transform = linkedInstance.GetTransform();
-					if (!transform.AlmostEqual(Transform.Identity))
-					{
-						solidToIntersect = SolidUtils.CreateTransformed(
-						  solidToIntersect, transform.Inverse);
-					}
-					FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
-
-					List<Element> intersectsList = collector.WherePasses(new ElementIntersectsSolidFilter(solidToIntersect)).ToList();
-
-					foreach (Element intersectionEl in intersectsList)
-					{
-						elementList.Add(intersectionEl);
-					}
-					
-				}
-				catch (Exception exc)
-				{
-					ExceptionFound.Add(exc.ToString());
-				}
-			}
-			return elementList;
-		}
 		public bool IsMetalBeamIntersectsFW(Document doc, Element strucualBeam)
 		{
 			try
@@ -229,21 +153,31 @@ namespace RuleOne
 			Wall wall = wallEl as Wall;
 			List<Face> wallNormalFaces = FindWallNormalFace(wall);
 			bool isFD = false;
-
+			Solid intersectionSolid = null;
 			try
 			{
 				foreach (Face wallFace in wallNormalFaces)
 				{
-
-					var intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(TurnWallFaceToSolid(wallFace, linkedInstance),
-						TurnElToSolid(ductEl, mepTransform), BooleanOperationsType.Intersect);
+					try
+					{
+						Solid ductSolid = TurnElToSolid(ductEl, mepTransform);
+						
+						Solid wallFaceSolid = TurnWallFaceToSolid(wallFace, linkedInstance);
+						intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(wallFaceSolid, ductSolid, BooleanOperationsType.Intersect);
+					}
+					catch (Exception exc)
+					{
+						ExceptionFound.Add(exc.ToString() + " " + ductEl.Id.ToString());
+						if (CheckIsFDWithScaledBB(doc, ductEl))
+						{
+							return true;
+						}
+						else { return false; }
+						
+					}
 
 					if (intersectionSolid.Volume > 0)
 					{
-						if (ductEl.Id.ToString() == "135902")
-						{
-							string shina = "any";
-						}
 						PlanarFace solidPlanarFace = getIntersectionSolidRightFace(intersectionSolid, wallFace);
 
 						Solid finalSolid = CreateSolidFromVertices((double)(8 / 12 + wall.Width), getVerticesFromPlanarFace(solidPlanarFace, 1/3),
@@ -277,8 +211,28 @@ namespace RuleOne
 				ExceptionFound.Add(exc.ToString() + " " + ductEl.Id.ToString());
 				return false;
 			}
-		}
-		public List<Element> GetHorizontalDuctsInLinked(Document linkedDoc)
+		} 
+        private bool CheckIsFDWithScaledBB(Document doc, Element el)
+        {
+			var buffer = new XYZ((double)1/2, (double)1 / 2, (double)1 / 2);
+			try
+			{
+				foreach(Element ele in GetIntesectingDuctAccessory(doc, el, buffer))
+				{
+					if (AssertFireDumper(ele))
+					{
+						return true;
+					}
+				}
+			}
+			catch (Exception exc)
+			{
+				ExceptionFound.Add(exc.ToString());
+			}
+			return false;
+        }
+
+        public List<Element> GetHorizontalDuctsInLinked(Document linkedDoc)
 		{
 			List<Element> linkedDucts = new List<Element>();
 

@@ -30,6 +30,17 @@ namespace RuleOne
 			var solidInTargetModel = SolidUtils.CreateTransformed(solid, transform);
 			return solidInTargetModel;
 		}
+		public static bool ElementIsNotInTheList(Element ele)
+		{
+			foreach (ElementId id in GetIdsFromEls(whereIsFD))
+			{
+				if (ele.Id.Equals(id))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
 		public static void ClearLists()
 		{
 			fireDumpers.Clear();
@@ -38,6 +49,103 @@ namespace RuleOne
 			noFam.Clear();
 			bbIsNull.Clear();
 			ductInstulation.Clear();
+		}
+		public static HashSet<Element> GetIntesectingElements(Document doc, Element elToIntersect)
+		{
+			HashSet<Element> elementList = new HashSet<Element>();
+
+			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
+			{
+				try
+				{
+					var bb = elToIntersect.get_BoundingBox(null);
+
+					if (bb != null)
+					{
+						var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min, GetTransform(doc, elToIntersect.Document.Title),
+							linkedInstance.GetTotalTransform()), TransformPoint(bb.Max, GetTransform(doc, elToIntersect.Document.Title),
+							linkedInstance.GetTotalTransform())));
+
+						FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
+
+						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementMulticategoryFilter(filterBuiltInCats)).ToList();
+
+						foreach (Element intersectionEl in intersectsList)
+						{
+							elementList.Add(intersectionEl);
+						}
+					}
+				}
+				catch (Exception exc)
+				{
+					ExceptionFound.Add(exc.ToString());
+				}
+			}
+			return elementList;
+		}
+		public static HashSet<Element> GetIntesectingDuctAccessory(Document doc, Element elToIntersect, XYZ buffer)
+		{
+			HashSet<Element> elementList = new HashSet<Element>();
+
+			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
+			{
+				try
+				{
+					var bb = elToIntersect.get_BoundingBox(null);
+
+					if (bb != null)
+					{
+						var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min.Subtract(buffer), GetTransform(doc, elToIntersect.Document.Title),
+							linkedInstance.GetTotalTransform()), TransformPoint(bb.Max.Add(buffer), GetTransform(doc, elToIntersect.Document.Title),
+							linkedInstance.GetTotalTransform())));
+
+						FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
+
+						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementCategoryFilter(BuiltInCategory.OST_DuctAccessory)).ToList();
+
+						foreach (Element intersectionEl in intersectsList)
+						{
+							elementList.Add(intersectionEl);
+						}
+					}
+				}
+				catch (Exception exc)
+				{
+					ExceptionFound.Add(exc.ToString());
+				}
+			}
+			return elementList;
+		}
+		public static HashSet<Element> GetIntesectingElements(Document doc, Solid solidToIntersect)
+		{
+			HashSet<Element> elementList = new HashSet<Element>();
+
+			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
+			{
+				try
+				{
+					Transform transform = linkedInstance.GetTransform();
+					if (!transform.AlmostEqual(Transform.Identity))
+					{
+						solidToIntersect = SolidUtils.CreateTransformed(
+						  solidToIntersect, transform.Inverse);
+					}
+					FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
+
+					List<Element> intersectsList = collector.WherePasses(new ElementIntersectsSolidFilter(solidToIntersect)).ToList();
+
+					foreach (Element intersectionEl in intersectsList)
+					{
+						elementList.Add(intersectionEl);
+					}
+
+				}
+				catch (Exception exc)
+				{
+					ExceptionFound.Add(exc.ToString());
+				}
+			}
+			return elementList;
 		}
 		public static List<RevitLinkInstance> GetAllLinked(Document doc)
 		{
@@ -113,39 +221,6 @@ namespace RuleOne
 			var pointInTargetTransform = targetTransform.OfPoint(pointInHost);
 
 			return pointInTargetTransform;
-		}
-		public static void PrintResults(string headline, List<Element> elList)
-		{
-			string info = "";
-
-			foreach (Element ele in elList)
-			{
-				info += ele.Name + " " + ele.Id + " " + "builtincat: " + (BuiltInCategory)ele.Category.Id.IntegerValue + Environment.NewLine;
-			}
-			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
-							+ Environment.NewLine + info + Environment.NewLine);
-		}
-		public static void PrintResults(string headline, List<BuiltInCategory> elList)
-		{
-			string info = "";
-
-			foreach (BuiltInCategory ele in elList)
-			{
-				info +=  "builtincat: " + ele.ToString() + Environment.NewLine;
-			}
-			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
-							+ Environment.NewLine + info + Environment.NewLine);
-		}
-		public static void PrintResults(string headline, List<string> elList)
-		{
-			string info = "";
-
-			foreach (string ele in elList)
-			{
-				info +=  ele + Environment.NewLine;
-			}
-			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
-							+ Environment.NewLine + info + Environment.NewLine);
 		}
 		public static void PrintResults(string headline, HashSet<Element> elList)
 		{
@@ -506,6 +581,40 @@ namespace RuleOne
 			}
 			TaskDialog.Show("revit", "count: " + ExceptionFound.Count() + Environment.NewLine + exInfo);
 		}
+		//Not in use at the moment
+		public static void PrintResults(string headline, List<Element> elList)
+		{
+			string info = "";
+
+			foreach (Element ele in elList)
+			{
+				info += ele.Name + " " + ele.Id + " " + "builtincat: " + (BuiltInCategory)ele.Category.Id.IntegerValue + Environment.NewLine;
+			}
+			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
+							+ Environment.NewLine + info + Environment.NewLine);
+		}
+		public static void PrintResults(string headline, List<BuiltInCategory> elList)
+		{
+			string info = "";
+
+			foreach (BuiltInCategory ele in elList)
+			{
+				info += "builtincat: " + ele.ToString() + Environment.NewLine;
+			}
+			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
+							+ Environment.NewLine + info + Environment.NewLine);
+		}
+		public static void PrintResults(string headline, List<string> elList)
+		{
+			string info = "";
+
+			foreach (string ele in elList)
+			{
+				info += ele + Environment.NewLine;
+			}
+			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
+							+ Environment.NewLine + info + Environment.NewLine);
+		}
 		public static bool CheckIntersectionWithSolids(Document doc, Element eleOne, Element eleTwo)
 		{
 			try
@@ -525,8 +634,6 @@ namespace RuleOne
 			}
 			return false;
 		}
-
-		//Test Helper-
 		public static void SeeNoBBEl(UIDocument uiDoc, Document doc)
 		{
 			List<Element> noBBList = GetNoBBInHost(doc);
