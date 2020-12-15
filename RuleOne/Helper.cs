@@ -13,6 +13,29 @@ namespace RuleOne
 	[Regeneration(RegenerationOption.Manual)]
 	public static class Helper
 	{
+		public static List<Element> GetHorizontalDuctsInLinked(Document linkedDoc)
+		{
+			List<Element> linkedDucts = new List<Element>();
+
+			ElementMulticategoryFilter ductFilter = new ElementMulticategoryFilter(ductsBuiltInCats);
+
+			foreach (Element linkedEl in new FilteredElementCollector(linkedDoc)
+			.WherePasses(ductFilter))
+			{
+				try
+				{
+					if (IsHrizontal(linkedEl))
+					{
+						linkedDucts.Add(linkedEl);
+					}
+				}
+				catch (Exception exc)
+				{
+					ExceptionFound.Add(exc.ToString());
+				}
+			}
+			return linkedDucts;
+		}
 		public static bool AssertMetalBeam(Element el)
 		{
 			BuiltInCategory bipFraming = BuiltInCategory.OST_StructuralFraming;
@@ -49,6 +72,36 @@ namespace RuleOne
 			noFam.Clear();
 			bbIsNull.Clear();
 			ductInstulation.Clear();
+		}
+		public static HashSet<Element> GetIntesectingElementsByCatagory(Document doc, Element elToIntersect, BuiltInCategory builtInCategory)
+		{
+			HashSet<Element> elementList = new HashSet<Element>();
+
+			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
+			{
+				try
+				{
+					var bb = elToIntersect.get_BoundingBox(null);
+
+					var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min, GetTransform(doc, elToIntersect.Document.Title),
+						linkedInstance.GetTotalTransform()), TransformPoint(bb.Max, GetTransform(doc, elToIntersect.Document.Title),
+						linkedInstance.GetTotalTransform())));
+
+					FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
+
+					List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementCategoryFilter(builtInCategory)).ToList();
+
+					foreach (Element intersectionEl in intersectsList)
+					{
+						elementList.Add(intersectionEl);
+					}
+				}
+				catch (Exception exc)
+				{
+					ExceptionFound.Add(exc.ToString());
+				}
+			}
+			return elementList;
 		}
 		public static HashSet<Element> GetIntesectingElements(Document doc, Element elToIntersect)
 		{

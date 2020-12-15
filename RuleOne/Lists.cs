@@ -18,7 +18,7 @@ namespace RuleOne
 		public static List<Element> fireDumpersFromIntersection = new List<Element>();
 		public static HashSet<Element> whereIsFD = new HashSet<Element>();
 		public static List<Element> structuralFraming = new List<Element>();
-		public static List<Element> generalElList = new List<Element>();
+		public static HashSet<Element> generalElList = new HashSet<Element>();
 		public static List<BuiltInCategory> allCatagories = new List<BuiltInCategory>();
 
 		public static List<string> optionList = new List<string>{"Firecase Column", "Fire Rated", "Fireline", "Fire Rated Wall",
@@ -31,6 +31,7 @@ namespace RuleOne
 			BuiltInCategory.OST_DuctAccessory, BuiltInCategory.OST_FlexDuctTags, BuiltInCategory.OST_DuctTags, BuiltInCategory.OST_DuctInsulations};
 		static public List<BuiltInCategory> customBuiltInCats = new List<BuiltInCategory>(){BuiltInCategory.OST_DuctCurves};
 		static public List<BuiltInCategory> filterBuiltInCats = new List<BuiltInCategory>() { BuiltInCategory.OST_Walls, BuiltInCategory.OST_StructuralFraming };
+		static public List<BuiltInCategory> builtInCatsIsEnd = new List<BuiltInCategory>() { BuiltInCategory.OST_Walls, BuiltInCategory.OST_DuctTerminal };
 		static public readonly string[] optionalFamiliesNames =
 		{
 			"fd", "firedamper", "firesmokedamper", "damperrectangular", "br+adamper", "smokedamper", "firesmoke",
@@ -38,4 +39,5 @@ namespace RuleOne
 		};
 		static public readonly string[] optionalFamiliesNamesToExclude = { "volumecontroldamper", "balanc" };
 	}
+
 }

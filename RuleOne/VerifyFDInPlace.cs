@@ -46,6 +46,7 @@ namespace RuleOne
 									if (ElementIsNotInTheList(ele))
 									{
 										whereIsFD.Add(ele);
+										generalElList.Add(ductEl);
 									}
 								}
 							}
@@ -58,6 +59,7 @@ namespace RuleOne
 										if (ElementIsNotInTheList(ele))
 										{
 											whereIsFD.Add(ele);
+											generalElList.Add(ductEl);
 										}
 									}
 								}								
@@ -75,10 +77,12 @@ namespace RuleOne
 				}
 			}
 				PrintResults("whereIsFD", whereIsFD);
-				PrintExceptions();
+			PrintResults("whereIsFD - Ducts", generalElList);
+			PrintExceptions();
 
 				ClearLists(); 		
         }
+		
         private bool IsFireDumperIntersectDuctSolid(Document doc, Element ductEl)
         {
 			try
@@ -241,29 +245,7 @@ namespace RuleOne
 			return false;
         }
 
-        public List<Element> GetHorizontalDuctsInLinked(Document linkedDoc)
-		{
-			List<Element> linkedDucts = new List<Element>();
-
-			ElementMulticategoryFilter ductFilter = new ElementMulticategoryFilter(ductsBuiltInCats);
-
-			foreach (Element linkedEl in new FilteredElementCollector(linkedDoc)
-			.WherePasses(ductFilter))
-			{
-				try
-				{
-					if (IsHrizontal(linkedEl))
-					{
-						linkedDucts.Add(linkedEl);
-					}
-				}
-				catch (Exception exc)
-				{
-					ExceptionFound.Add(exc.ToString());
-				}
-			}
-			return linkedDucts;
-		}
+        
 
 	}
 }
