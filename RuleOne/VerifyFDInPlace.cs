@@ -76,11 +76,11 @@ namespace RuleOne
 					ExceptionFound.Add(exc.ToString());
 				}
 			}
-				PrintResults("whereIsFD", whereIsFD);
+			PrintResults("whereIsFD", whereIsFD);
 			PrintResults("whereIsFD - Ducts", generalElList);
 			PrintExceptions();
 
-				ClearLists(); 		
+			ClearLists(); 		
         }
 		
         private bool IsFireDumperIntersectDuctSolid(Document doc, Element ductEl)
@@ -180,17 +180,16 @@ namespace RuleOne
 
 					if (intersectionSolid.Volume > 0)
 					{
-
 						PlanarFace solidPlanarFace = GetIntersectionSolidRightFace(intersectionSolid, wallFace);
 						if (solidPlanarFace != null)
 						{
 							Solid finalSolid = CreateSolidFromVertices((double)(8 / 12 + wall.Width), GetVerticesFromPlanarFace(solidPlanarFace, 1 / 3),
 	solidPlanarFace.FaceNormal.Negate());
-							Solid finalSolidInStrcModel = TransformSolid(linkedInstance.GetTransform(), Transform.Identity, finalSolid);
+							Solid finalSolidInLinkedModel = TransformSolid(linkedInstance.GetTransform(), Transform.Identity, finalSolid);
 
 							FilteredElementCollector collector = new FilteredElementCollector(GetDocument(doc, "MEP"));
 
-							collector.WherePasses(new ElementIntersectsSolidFilter(finalSolidInStrcModel));
+							collector.WherePasses(new ElementIntersectsSolidFilter(finalSolidInLinkedModel));
 
 							foreach (Element element in collector)
 							{

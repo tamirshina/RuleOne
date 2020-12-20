@@ -45,7 +45,7 @@ namespace RuleOne
 					}
 					else
 					{
-						MoveToNext();
+						//MoveToNext();
 					}
 				}
 			}

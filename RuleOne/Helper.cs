@@ -456,9 +456,9 @@ namespace RuleOne
 				.ToList();
 			try
 			{
-				Solid someSolid = CreateSolidFromVerticesWithCurveLoop((double)1 / 12, vertices, wallPlanarFace.FaceNormal,
+				Solid faceSolid = CreateSolidFromVerticesWithCurveLoop((double)1 / 12, vertices, wallPlanarFace.FaceNormal,
 					wallPlanarFace.GetEdgesAsCurveLoops(), linkedInstance);
-				return someSolid;
+				return faceSolid;
 			}
 			catch (Exception exc)
 			{
