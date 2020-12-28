@@ -36,6 +36,30 @@ namespace RuleOne
 			}
 			return linkedDucts;
 		}
+		public static List<Element> GetHorizontalDucts(IEnumerable<Model> mepModels)
+		{
+			List<Element> horizontalDucts = null;
+			try
+			{
+				ElementMulticategoryFilter ductFilter = new ElementMulticategoryFilter(ductsBuiltInCats);
+
+				//mepModels.SelectMany(d => d.doc); 
+
+				foreach (var model in mepModels)
+				{
+					horizontalDucts = new FilteredElementCollector(model.doc)
+						.WherePasses(ductFilter)
+						.Cast<Element>()
+						.Where(e => IsHrizontal(e)).ToList();
+				}
+				
+			}
+			catch (Exception exception)
+			{
+				ExceptionFound.Add(exception.ToString());
+			}
+			return horizontalDucts;
+		}
 		public static bool AssertMetalBeam(Element el)
 		{
 			BuiltInCategory bipFraming = BuiltInCategory.OST_StructuralFraming;
@@ -53,7 +77,7 @@ namespace RuleOne
 			var solidInTargetModel = SolidUtils.CreateTransformed(solid, transform);
 			return solidInTargetModel;
 		}
-		public static bool ElementIsNotInTheList(Element ele)
+		public static bool ElementIsNotInTheList(Element ele, HashSet<Element> whereIsFD)
 		{
 			foreach (ElementId id in GetIdsFromEls(whereIsFD))
 			{
@@ -66,12 +90,8 @@ namespace RuleOne
 		}
 		public static void ClearLists()
 		{
-			fireDumpers.Clear();
-			whereIsFD.Clear();
 			ExceptionFound.Clear();
-			noFam.Clear();
-			bbIsNull.Clear();
-			ductInstulation.Clear();
+
 		}
 		public static HashSet<Element> GetIntesectingElementsByCatagory(Document doc, Element elToIntersect, BuiltInCategory builtInCategory)
 		{
@@ -103,7 +123,7 @@ namespace RuleOne
 			}
 			return elementList;
 		}
-		public static HashSet<Element> GetIntesectingElements(Document doc, Element elToIntersect)
+		public static HashSet<Element> GetIntesectingElementsWithBoundingBox(Document doc, Element elToIntersect)
 		{
 			HashSet<Element> elementList = new HashSet<Element>();
 
@@ -350,14 +370,8 @@ namespace RuleOne
 					{
 						if (e is Duct duct)
 						{
-							noFam.Add(duct);
 							ductName = duct.DuctType.Name;
 						}
-						else
-						{
-							ductInstulation.Add(e);
-						}
-
 					}
 					foreach (string excludeStr in optionalFamiliesNamesToExclude)
 					{

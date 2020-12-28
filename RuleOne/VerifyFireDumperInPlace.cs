@@ -1,19 +1,18 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Autodesk.Revit.Attributes;
+using Autodesk.Revit.DB;
+using Autodesk.Revit.UI;
+using static RuleOne.Helper;
+using static RuleOne.Lists;
 
 namespace RuleOne
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using Autodesk.Revit.Attributes;
-    using Autodesk.Revit.DB;
-    using Autodesk.Revit.DB.Mechanical;
-    using Autodesk.Revit.UI;
-	using static RuleOne.Helper;
-	using static RuleOne.Lists;
-	[Transaction(TransactionMode.Manual)]
+
+    [Transaction(TransactionMode.Manual)]
     [Regeneration(RegenerationOption.Manual)]
-    public class VerifyFDInPlace : IExternalCommand
+    public class VerifyFireDumperInPlace : IExternalCommand
     {
         public Result Execute(ExternalCommandData revit, ref string message, ElementSet elements)
         {
@@ -21,68 +20,77 @@ namespace RuleOne
 			UIDocument uiDoc = revit.Application.ActiveUIDocument;
 			Document doc = uiDoc.Document;
 
-			FinalFunc(doc);
+			MainExecution(doc);
 
 			return Result.Succeeded;
         }
-		public void FinalFunc(Document doc)
+		public void MainExecution(Document doc)
 		{
-
-			List<Element> ductList = GetHorizontalDuctsInLinked(GetDocument(doc, "MEP"));
-
-			foreach (Element ductEl in ductList)
+			HashSet<Element> whereIsFireDumper = new HashSet<Element>(); 
+            List < Model > allModels  = GetAllModels(doc);
+			List<Element> ducts = GetHorizontalDucts(allModels.Where(m => m.isMep));
+			
+			foreach (Element duct in ducts)
 			{
 				try
 				{
-					if (!AssertFireDumper(ductEl))
+					if (!AssertFireDumper(duct))
 					{
-						foreach (Element ele in GetIntesectingElements(doc, ductEl))
+						foreach (Element ele in GetIntesectingElementsWithBoundingBox(doc, duct))
 						{
 							if (AssertFrireWall(ele))
 							{
-								if (!IsFireDumperInIntersection(doc, ductEl, ele))
+								if (!IsFireDumperInIntersection(doc, duct, ele))
 								{
 									//check for duplicates 
-									if (ElementIsNotInTheList(ele))
+									if (ElementIsNotInTheList(ele, whereIsFireDumper))
 									{
-										whereIsFD.Add(ele);
-										generalElList.Add(ductEl);
+										whereIsFireDumper.Add(ele);
 									}
 								}
 							}
 							if (AssertMetalBeam(ele))
 							{
-								if (IsMetalBeamIntersectsFW	(doc, ele))
+								if (IsMetalBeamIntersectsFireWall(doc, ele))
 								{
-									if (!IsFireDumperIntersectDuctSolid(doc, ductEl))
+									if (!IsFireDumperIntersectDuctSolid(doc, duct))
 									{
-										if (ElementIsNotInTheList(ele))
+										if (ElementIsNotInTheList(ele, whereIsFireDumper))
 										{
-											whereIsFD.Add(ele);
-											generalElList.Add(ductEl);
+											whereIsFireDumper.Add(ele);
 										}
 									}
-								}								
-							}							
+								}
+							}
 						}
 					}
-					else
-					{
-						fireDumpers.Add(ductEl);
-					}
-				}
+				}					
 				catch (Exception exc)
 				{
 					ExceptionFound.Add(exc.ToString());
 				}
 			}
-			PrintResults("whereIsFD", whereIsFD);
-			PrintResults("whereIsFD - Ducts", generalElList);
+			PrintResults("whereIsFD", whereIsFireDumper);
 			PrintExceptions();
-
 			ClearLists(); 		
         }
-		
+
+		private List<Model> GetAllModels(Document doc)
+        {
+			List<Model> models = new List<Model>();
+			 ;
+			foreach (var m in new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance)))
+			{
+				var linkedModel = ((RevitLinkInstance)m);
+				models.Add(new Model(linkedModel.GetLinkDocument(), linkedModel.GetTotalTransform(),
+					linkedModel.GetLinkDocument().Title.Contains("MEP") ? true : false));
+			}
+			//Add host 
+			models.Add(new Model(doc, Transform.Identity, false));
+			return models;
+			throw new NotImplementedException();
+        }
+
         private bool IsFireDumperIntersectDuctSolid(Document doc, Element ductEl)
         {
 			try
@@ -104,7 +112,7 @@ namespace RuleOne
 			}
 			return false;
         }
-		public bool IsMetalBeamIntersectsFW(Document doc, Element strucualBeam)
+		public bool IsMetalBeamIntersectsFireWall(Document doc, Element strucualBeam)
 		{
 			try
 			{
@@ -196,7 +204,6 @@ namespace RuleOne
 								if (AssertFireDumper(element))
 								{
 									isFD = true;
-									fireDumpersFromIntersection.Add(element);
 									return true;
 								}
 							}

@@ -10,15 +10,7 @@ namespace RuleOne
 	public static class Lists
     {
 		public static List<String> ExceptionFound = new List<string>();
-		public static List<String> famNames = new List<string>();
-		public static HashSet<Duct> noFam = new HashSet<Duct>();
-		public static HashSet<Element> bbIsNull = new HashSet<Element>();
-		public static HashSet<Element> ductInstulation = new HashSet<Element>();
-		public static List<Element> fireDumpers = new List<Element>();
-		public static List<Element> fireDumpersFromIntersection = new List<Element>();
-		public static HashSet<Element> whereIsFD = new HashSet<Element>();
-		public static List<Element> structuralFraming = new List<Element>();
-		public static HashSet<Element> generalElList = new HashSet<Element>();
+
 		public static List<BuiltInCategory> allCatagories = new List<BuiltInCategory>();
 
 		public static List<string> optionList = new List<string>{"Firecase Column", "Fire Rated", "Fireline", "Fire Rated Wall",

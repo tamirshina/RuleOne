@@ -1,7 +1,6 @@
-﻿using System;
+﻿
 using Autodesk.Revit.DB;
-using System.Collections.Generic;
-using System.Text;
+
 
 namespace RuleOne
 {
@@ -9,8 +8,8 @@ namespace RuleOne
     {
         public FireWallEl(Element fireWall, Document wallDoc)
         {
-            FireWall = fireWall;
-            WallDoc = wallDoc;
+            this.FireWall = fireWall;
+            this.WallDoc = wallDoc;
         }
 
         public Element FireWall
