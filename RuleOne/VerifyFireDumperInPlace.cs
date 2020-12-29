@@ -14,95 +14,59 @@ namespace RuleOne
     [Regeneration(RegenerationOption.Manual)]
     public class VerifyFireDumperInPlace : IExternalCommand
     {
-        public Result Execute(ExternalCommandData revit, ref string message, ElementSet elements)
+		private const int NO_CHANGE_BUFFER = 1;
+		private readonly double EIGHT_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(8d, DisplayUnitType.DUT_DECIMAL_INCHES);
+		private readonly double SIX_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(6d, DisplayUnitType.DUT_DECIMAL_INCHES);
+		private readonly double FOUR_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(4d, DisplayUnitType.DUT_DECIMAL_INCHES);
+
+		public Result Execute(ExternalCommandData revit, ref string message, ElementSet elements)
         {
 
 			UIDocument uiDoc = revit.Application.ActiveUIDocument;
-			Document doc = uiDoc.Document;
+			Document activeDocument = uiDoc.Document;
 
-			MainExecution(doc);
+			MainExecution(activeDocument);
 
 			return Result.Succeeded;
         }
-		public void MainExecution(Document doc)
+		public void MainExecution(Document activeDocument)
 		{
-			HashSet<Element> whereIsFireDumper = new HashSet<Element>(); 
-            List < Model > allModels  = GetAllModels(doc);
+            List <Model> allModels  = GetAllModels(activeDocument);
 			List<Element> ducts = GetHorizontalDucts(allModels.Where(m => m.isMep));
-			
-			foreach (Element duct in ducts)
-			{
-				try
-				{
-					if (!AssertFireDumper(duct))
-					{
-						foreach (Element ele in GetIntesectingElementsWithBoundingBox(doc, duct))
-						{
-							if (AssertFrireWall(ele))
-							{
-								if (!IsFireDumperInIntersection(doc, duct, ele))
-								{
-									//check for duplicates 
-									if (ElementIsNotInTheList(ele, whereIsFireDumper))
-									{
-										whereIsFireDumper.Add(ele);
-									}
-								}
-							}
-							if (AssertMetalBeam(ele))
-							{
-								if (IsMetalBeamIntersectsFireWall(doc, ele))
-								{
-									if (!IsFireDumperIntersectDuctSolid(doc, duct))
-									{
-										if (ElementIsNotInTheList(ele, whereIsFireDumper))
-										{
-											whereIsFireDumper.Add(ele);
-										}
-									}
-								}
-							}
-						}
-					}
-				}					
-				catch (Exception exc)
-				{
-					ExceptionFound.Add(exc.ToString());
-				}
-			}
+
+			List<Element> whereIsFireDumper = CheckIsMissingFireDumper(activeDocument, ducts.Where(d => !AssertFireDumper(d)), allModels);
+
 			PrintResults("whereIsFD", whereIsFireDumper);
 			PrintExceptions();
 			ClearLists(); 		
         }
 
-		private List<Model> GetAllModels(Document doc)
+        private List<Element> CheckIsMissingFireDumper(Document activeDocument, IEnumerable<Element> ducts, List<Model> allModels)
         {
-			List<Model> models = new List<Model>();
-			 ;
-			foreach (var m in new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance)))
-			{
-				var linkedModel = ((RevitLinkInstance)m);
-				models.Add(new Model(linkedModel.GetLinkDocument(), linkedModel.GetTotalTransform(),
-					linkedModel.GetLinkDocument().Title.Contains("MEP") ? true : false));
-			}
-			//Add host 
-			models.Add(new Model(doc, Transform.Identity, false));
-			return models;
-			throw new NotImplementedException();
-        }
-
-        private bool IsFireDumperIntersectDuctSolid(Document doc, Element ductEl)
-        {
+			List<ResultType> missingFireDumper = new List<ResultType>();  
 			try
 			{
-				Solid ductSolid = TurnElToSolid(ductEl, GetTransform(doc, ductEl.Document.Title));
-				Solid ductScaled = ScaleSolidInPlace(ductSolid, (double)1.25);
-				
-				foreach (Element ele in GetIntesectingElements(doc, ductSolid))
+				foreach (Element duct in ducts)
 				{
-					if (AssertFireDumper(ele))
+					foreach (Element ele in GetIntesectingElementsWithBoundingBox(activeDocument, duct, allModels))
 					{
-						return true;
+						if (IsFireRatedWall(ele))
+						{
+							if (!IsFireDumperInIntersection(activeDocument, duct, ele, allModels))
+							{
+								missingFireDumper.Add(new ResultType (ele, duct));								
+							}
+						}
+						else if (IsMetalBeam(ele))
+						{
+							if (IsMetalBeamIntersectsFireRatedWall(activeDocument, ele, allModels))
+							{
+								if (!IsFireDumperInPlace(activeDocument, duct, allModels))
+								{
+									missingFireDumper.Add(new ResultType(ele, duct));
+								}
+							}
+						}
 					}
 				}
 			}
@@ -110,30 +74,72 @@ namespace RuleOne
 			{
 				ExceptionFound.Add(exc.ToString());
 			}
+			
+			return removeDuplicates(missingFireDumper);
+		}
+		private List<Element> removeDuplicates(List<ResultType> results)
+		{
+			HashSet<Element> noDuplicates = new HashSet<Element>();
+			List<Element> wallsAndBeams = results.Select(w => w.FireWallOrMetalBeam).ToList();
+
+			foreach (Element e in wallsAndBeams)
+			{
+				if (CheckDuplicates(e, noDuplicates))
+				{
+					noDuplicates.Add(e); 
+				}
+			}
+
+			return noDuplicates.ToList();
+		}
+
+		private List<Model> GetAllModels(Document activeDocument)
+        {
+			List<Model> models = new List<Model>();
+			 ;
+			foreach (var m in new FilteredElementCollector(activeDocument).OfClass(typeof(RevitLinkInstance)))
+			{
+				var linkedModel = ((RevitLinkInstance)m);
+				models.Add(new Model(linkedModel.GetLinkDocument(), linkedModel.GetTotalTransform(),
+					linkedModel.GetLinkDocument().Title.Contains("MEP") ? true : false));
+			}
+			//Add host 
+			models.Add(new Model(activeDocument, Transform.Identity, false));
+			return models;
+			throw new NotImplementedException();
+        }
+
+        private bool IsFireDumperInPlace(Document activeDocument, Element duct, List<Model> allModels)
+        {
+			try
+			{
+				Model ductModel = allModels.Single(m => m.doc.Title == duct.Document.Title);
+				Solid ductSolid = TurnElToSolid(duct, ductModel.transform);
+                foreach (var _ in GetIntesectingElementsBySolid(ref ductSolid, allModels).Where(e => AssertFireDumper(e)))
+                {
+                    return true;
+                }
+            }
+			catch (Exception exc)
+			{
+				ExceptionFound.Add(exc.ToString());
+			}
 			return false;
         }
-		public bool IsMetalBeamIntersectsFireWall(Document doc, Element strucualBeam)
+		public bool IsMetalBeamIntersectsFireRatedWall(Document activeDocument, Element structuralBeam, List<Model> allModels)
 		{
 			try
 			{
-				Solid beamSolid = TurnElToSolid(strucualBeam, GetTransform(doc, strucualBeam.Document.Title));
-				//PaintSolid(doc, beamSolid, 1);
-				PlanarFace face = GetBottomFaceOfSolid(doc, beamSolid);
-				List<XYZ> vertices = GetVerticesFromPlanarFace(face, 1);
-				Solid faceSolid = CreateSolidFromVertices((double)1 / 3, vertices, -XYZ.BasisZ);
+				Model structuralBeamModel = allModels.Single(m => m.doc.Title == structuralBeam.Document.Title);
+				Solid beamSolid = TurnElToSolid(structuralBeam, structuralBeamModel.transform);
+				PlanarFace face = GetBottomFace(beamSolid);
+				List<XYZ> vertices = GetVerticesFromPlanarFace(face, NO_CHANGE_BUFFER);
+				Solid faceSolid = CreateSolidFromVertices(FOUR_INCH_BUFFER, vertices, -XYZ.BasisZ);
+                foreach (var _ in GetIntesectingElementsBySolid(ref faceSolid, allModels).Where(ele => IsFireRatedWall(ele)))
+                {
+                    return true;
+                }
 
-				foreach (Element ele in GetIntesectingElements(doc, faceSolid))
-				{
-					if (AssertFrireWall(ele))
-					{
-						var intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(faceSolid, TurnElToSolid(ele, GetTransform(doc, ele.Document.Title)), BooleanOperationsType.Intersect);
-						if (intersectionSolid.Volume > 0)
-						{
-							return true;
-						}						
-						return true;
-					}
-				}
                 return false;
 			}
 			catch (Exception exc)
@@ -142,28 +148,29 @@ namespace RuleOne
 				return false;
 			}
 		}
-		public PlanarFace GetBottomFaceOfSolid(Document doc, Solid solid)
+		public PlanarFace GetBottomFace(Solid solid)
 		{
-			PlanarFace face =null;
-			foreach (Face geomFace in solid.Faces)
+			PlanarFace planarFace =null;
+			foreach (Face face in solid.Faces)
 			{
-				if (geomFace is PlanarFace planar)
+				if (face is PlanarFace planar)
 				{
 					if (planar.FaceNormal.IsAlmostEqualTo(-XYZ.BasisZ))
 					{
-						face = planar;
+						planarFace = planar;
 					}
 				}
 			}
-			return face;
+			return planarFace;
 
 		}
-		public bool IsFireDumperInIntersection(Document doc, Element ductEl, Element wallEl)
+		public bool IsFireDumperInIntersection(Document activeDocument, Element duct, Element wallAsElement, List<Model> allModels)
 		{
-			Transform mepTransform = GetTransform(doc, ductEl.Document.Title);
-			Solid ductSolid = TurnElToSolid(ductEl, mepTransform);
-			RevitLinkInstance linkedInstance = GetRevitLinkedInstance(doc, wallEl.Document.Title); 
-			Wall wall = wallEl as Wall;
+			Model ductModel = allModels.Single(m => m.doc.Title == duct.Document.Title);
+			Transform mepTransform = ductModel.transform;
+			Solid ductSolid = TurnElToSolid(duct, mepTransform);
+			RevitLinkInstance linkedInstance = GetRevitLinkedInstance(activeDocument, wallAsElement.Document.Title); 
+			Wall wall = wallAsElement as Wall;
 			List<Face> wallNormalFaces = FindWallNormalFace(wall);
 			bool isFD = false;
 			Solid intersectionSolid = null;
@@ -178,8 +185,8 @@ namespace RuleOne
 					}
 					catch (Exception exc)
 					{
-						ExceptionFound.Add(exc.ToString() + " " + ductEl.Id.ToString());
-						if (CheckIsFDWithScaledBB(doc, ductEl))
+						ExceptionFound.Add(exc.ToString() + " " + duct.Id.ToString());
+						if (CheckIsFDWithScaledBB(activeDocument, duct, allModels))
 						{
 							return true;
 						}
@@ -191,11 +198,12 @@ namespace RuleOne
 						PlanarFace solidPlanarFace = GetIntersectionSolidRightFace(intersectionSolid, wallFace);
 						if (solidPlanarFace != null)
 						{
-							Solid finalSolid = CreateSolidFromVertices((double)(8 / 12 + wall.Width), GetVerticesFromPlanarFace(solidPlanarFace, 1 / 3),
-	solidPlanarFace.FaceNormal.Negate());
-							Solid finalSolidInLinkedModel = TransformSolid(linkedInstance.GetTransform(), Transform.Identity, finalSolid);
+							Solid finalSolid = CreateSolidFromVertices((double)(EIGHT_INCH_BUFFER + wall.Width),
+								GetVerticesFromPlanarFace(solidPlanarFace, (int)FOUR_INCH_BUFFER), solidPlanarFace.FaceNormal.Negate());
 
-							FilteredElementCollector collector = new FilteredElementCollector(GetDocument(doc, "MEP"));
+							Solid finalSolidInLinkedModel = TransformSolid(linkedInstance.GetTransform(), Transform.Identity, finalSolid);
+							
+							FilteredElementCollector collector = new FilteredElementCollector(GetDocument(activeDocument, "MEP"));
 
 							collector.WherePasses(new ElementIntersectsSolidFilter(finalSolidInLinkedModel));
 
@@ -215,7 +223,7 @@ namespace RuleOne
 						}
 						else
 						{
-							if (CheckIsFDWithScaledBB(doc, ductEl))
+							if (CheckIsFDWithScaledBB(activeDocument, duct, allModels))
 							{
 								return true;
 							}
@@ -227,16 +235,16 @@ namespace RuleOne
 			}
 			catch (Exception exc)
 			{
-				ExceptionFound.Add(exc.ToString() + " " + ductEl.Id.ToString());
+				ExceptionFound.Add(exc.ToString() + " " + duct.Id.ToString());
 				return false;
 			}
 		}
-        private bool CheckIsFDWithScaledBB(Document doc, Element el)
+        private bool CheckIsFDWithScaledBB(Document activeDocument, Element el, List<Model> allModels)
         {
-			var buffer = new XYZ((double)1/2, (double)1 / 2, (double)1 / 2);
+			var buffer = new XYZ(SIX_INCH_BUFFER, SIX_INCH_BUFFER, SIX_INCH_BUFFER);
 			try
 			{
-				foreach(Element ele in GetIntesectingDuctAccessory(doc, el, buffer))
+				foreach(Element ele in GetIntesectingDuctAccessory(activeDocument, el, buffer, allModels))
 				{
 					if (AssertFireDumper(ele))
 					{

@@ -13,42 +13,19 @@ namespace RuleOne
 	[Regeneration(RegenerationOption.Manual)]
 	public static class Helper
 	{
-		public static List<Element> GetHorizontalDuctsInLinked(Document linkedDoc)
-		{
-			List<Element> linkedDucts = new List<Element>();
+        private static double ONE_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(1d, DisplayUnitType.DUT_DECIMAL_INCHES);
 
-			ElementMulticategoryFilter ductFilter = new ElementMulticategoryFilter(ductsBuiltInCats);
-
-			foreach (Element linkedEl in new FilteredElementCollector(linkedDoc)
-			.WherePasses(ductFilter))
-			{
-				try
-				{
-					if (IsHrizontal(linkedEl))
-					{
-						linkedDucts.Add(linkedEl);
-					}
-				}
-				catch (Exception exc)
-				{
-					ExceptionFound.Add(exc.ToString());
-				}
-			}
-			return linkedDucts;
-		}
-		public static List<Element> GetHorizontalDucts(IEnumerable<Model> mepModels)
+        public static List<Element> GetHorizontalDucts(IEnumerable<Model> mepModels)
 		{
 			List<Element> horizontalDucts = null;
 			try
 			{
-				ElementMulticategoryFilter ductFilter = new ElementMulticategoryFilter(ductsBuiltInCats);
-
-				//mepModels.SelectMany(d => d.doc); 
+				ElementMulticategoryFilter ductCategoriesFilter = new ElementMulticategoryFilter(ductCategories);
 
 				foreach (var model in mepModels)
 				{
 					horizontalDucts = new FilteredElementCollector(model.doc)
-						.WherePasses(ductFilter)
+						.WherePasses(ductCategoriesFilter)
 						.Cast<Element>()
 						.Where(e => IsHrizontal(e)).ToList();
 				}
@@ -60,16 +37,13 @@ namespace RuleOne
 			}
 			return horizontalDucts;
 		}
-		public static bool AssertMetalBeam(Element el)
+		public static bool IsMetalBeam(Element el)
 		{
-			BuiltInCategory bipFraming = BuiltInCategory.OST_StructuralFraming;
-			BuiltInCategory elCat = (BuiltInCategory)el.Category.Id.IntegerValue;
-			if (bipFraming.Equals(elCat))
-			{
-				return true;
-			}
+			BuiltInCategory structuralBeam = BuiltInCategory.OST_StructuralFraming;
+			BuiltInCategory elementCategory = (BuiltInCategory)el.Category.Id.IntegerValue;
 
-				return false;
+			return structuralBeam.Equals(elementCategory);
+	
 		}
 		public static Solid TransformSolid(Transform targetTransform, Transform sourceTransform, Solid solid)
 		{
@@ -77,7 +51,7 @@ namespace RuleOne
 			var solidInTargetModel = SolidUtils.CreateTransformed(solid, transform);
 			return solidInTargetModel;
 		}
-		public static bool ElementIsNotInTheList(Element ele, HashSet<Element> whereIsFD)
+		public static bool CheckDuplicates(Element ele, HashSet<Element> whereIsFD)
 		{
 			foreach (ElementId id in GetIdsFromEls(whereIsFD))
 			{
@@ -93,55 +67,28 @@ namespace RuleOne
 			ExceptionFound.Clear();
 
 		}
-		public static HashSet<Element> GetIntesectingElementsByCatagory(Document doc, Element elToIntersect, BuiltInCategory builtInCategory)
+		public static HashSet<Element> GetIntesectingElementsWithBoundingBox(Document activeDocument, Element elementToIntersect,
+			List<Model> allModels)
 		{
 			HashSet<Element> elementList = new HashSet<Element>();
 
-			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
+			foreach (Model model in allModels)
 			{
 				try
 				{
-					var bb = elToIntersect.get_BoundingBox(null);
-
-					var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min, GetTransform(doc, elToIntersect.Document.Title),
-						linkedInstance.GetTotalTransform()), TransformPoint(bb.Max, GetTransform(doc, elToIntersect.Document.Title),
-						linkedInstance.GetTotalTransform())));
-
-					FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
-
-					List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementCategoryFilter(builtInCategory)).ToList();
-
-					foreach (Element intersectionEl in intersectsList)
-					{
-						elementList.Add(intersectionEl);
-					}
-				}
-				catch (Exception exc)
-				{
-					ExceptionFound.Add(exc.ToString());
-				}
-			}
-			return elementList;
-		}
-		public static HashSet<Element> GetIntesectingElementsWithBoundingBox(Document doc, Element elToIntersect)
-		{
-			HashSet<Element> elementList = new HashSet<Element>();
-
-			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
-			{
-				try
-				{
-					var bb = elToIntersect.get_BoundingBox(null);
+					var bb = elementToIntersect.get_BoundingBox(null);
 
 					if (bb != null)
 					{
-						var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min, GetTransform(doc, elToIntersect.Document.Title),
-							linkedInstance.GetTotalTransform()), TransformPoint(bb.Max, GetTransform(doc, elToIntersect.Document.Title),
-							linkedInstance.GetTotalTransform())));
+						
+						Model elementToIntersectModel = allModels.Single(m => m.doc.Title == elementToIntersect.Document.Title);
 
-						FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
+						var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min, elementToIntersectModel.transform, model.transform), 
+							TransformPoint(bb.Max, elementToIntersectModel.transform, model.transform)));
 
-						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementMulticategoryFilter(filterBuiltInCats)).ToList();
+						FilteredElementCollector collector = new FilteredElementCollector(model.doc);
+
+						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementMulticategoryFilter(intersectionElementsCatagories)).ToList();
 
 						foreach (Element intersectionEl in intersectsList)
 						{
@@ -156,23 +103,24 @@ namespace RuleOne
 			}
 			return elementList;
 		}
-		public static HashSet<Element> GetIntesectingDuctAccessory(Document doc, Element elToIntersect, XYZ buffer)
+		public static HashSet<Element> GetIntesectingDuctAccessory(Document activeDocument, Element elementToIntersect, XYZ buffer, List<Model> allModels)
 		{
 			HashSet<Element> elementList = new HashSet<Element>();
+			Model elementToIntersectModel = allModels.Single(m => m.doc.Title == elementToIntersect.Document.Title);
 
-			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
+			foreach (Model linkedInstance in allModels)
 			{
 				try
 				{
-					var bb = elToIntersect.get_BoundingBox(null);
+					var bb = elementToIntersect.get_BoundingBox(null);
 
 					if (bb != null)
 					{
-						var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min.Subtract(buffer), GetTransform(doc, elToIntersect.Document.Title),
-							linkedInstance.GetTotalTransform()), TransformPoint(bb.Max.Add(buffer), GetTransform(doc, elToIntersect.Document.Title),
-							linkedInstance.GetTotalTransform())));
+						var filter = new BoundingBoxIntersectsFilter(new Outline(TransformPoint(bb.Min.Subtract(buffer), elementToIntersectModel.transform,
+							linkedInstance.transform), TransformPoint(bb.Max.Add(buffer), elementToIntersectModel.transform,
+							linkedInstance.transform)));
 
-						FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
+						FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.doc);
 
 						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementCategoryFilter(BuiltInCategory.OST_DuctAccessory)).ToList();
 
@@ -189,23 +137,24 @@ namespace RuleOne
 			}
 			return elementList;
 		}
-		public static HashSet<Element> GetIntesectingElements(Document doc, Solid solidToIntersect)
+		public static HashSet<Element> GetIntesectingElementsBySolid(ref Solid solidToIntersect, List<Model> allModels)
 		{
 			HashSet<Element> elementList = new HashSet<Element>();
 
-			foreach (RevitLinkInstance linkedInstance in GetAllLinked(doc))
+			foreach (Model model in allModels)
 			{
 				try
 				{
-					Transform transform = linkedInstance.GetTransform();
-					if (!transform.AlmostEqual(Transform.Identity))
+					if (!model.transform.AlmostEqual(Transform.Identity))
 					{
 						solidToIntersect = SolidUtils.CreateTransformed(
-						  solidToIntersect, transform.Inverse);
+						  solidToIntersect, model.transform.Inverse);
 					}
-					FilteredElementCollector collector = new FilteredElementCollector(linkedInstance.GetLinkDocument());
 
-					List<Element> intersectsList = collector.WherePasses(new ElementIntersectsSolidFilter(solidToIntersect)).ToList();
+					List<Element> intersectsList = new FilteredElementCollector(model.doc)
+						.WherePasses(new ElementIntersectsSolidFilter(solidToIntersect))
+						.Cast<Element>()
+						.ToList();                  
 
 					foreach (Element intersectionEl in intersectsList)
 					{
@@ -220,33 +169,9 @@ namespace RuleOne
 			}
 			return elementList;
 		}
-		public static List<RevitLinkInstance> GetAllLinked(Document doc)
+		public static Document GetDocument(Document activeDocument, string target)
 		{
-			List<RevitLinkInstance> linkedList = new List<RevitLinkInstance>();
-			var models = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance));
-			foreach (var m in models)
-			{
-				linkedList.Add(((RevitLinkInstance)m)); //m as RevitLinkInstance;
-			}
-			return linkedList;
-		}
-		public static Transform GetTransform(Document doc, string target)
-		{
-			var models = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance));
-			foreach (var m in models)
-			{
-				var linkedModel = ((RevitLinkInstance)m);
-				var tempDoc = linkedModel.GetLinkDocument();
-				if (tempDoc.Title.Contains(target))
-				{
-					return linkedModel.GetTotalTransform();
-				}
-			}
-			return null;
-		}
-		public static Document GetDocument(Document doc, string target)
-		{
-			var models = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance));
+			var models = new FilteredElementCollector(activeDocument).OfClass(typeof(RevitLinkInstance));
 			foreach (var m in models)
 			{
 				var linkedModel = ((RevitLinkInstance)m); //m as RevitLinkInstance;
@@ -258,25 +183,9 @@ namespace RuleOne
 			}
 			return null;
 		}
-		public static Solid ScaleSolidInPlace(Solid original, double scale)
+		public static RevitLinkInstance GetRevitLinkedInstance(Document activeDocument, string target)
 		{
-			try
-			{
-				var center = original.ComputeCentroid();
-				var translation = Transform.CreateTranslation(center);
-				var scaling = translation.Inverse.ScaleBasisAndOrigin(scale);
-				var solid2 = SolidUtils.CreateTransformed(original, scaling);
-				return SolidUtils.CreateTransformed(solid2, translation);
-			}
-			catch(Exception exc)
-			{
-				ExceptionFound.Add(exc.ToString());
-				return null;
-			}
-		}
-		public static RevitLinkInstance GetRevitLinkedInstance(Document doc, string target)
-		{
-			var models = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance));
+			var models = new FilteredElementCollector(activeDocument).OfClass(typeof(RevitLinkInstance));
 			foreach (var m in models)
 			{
 				var linkedModel = ((RevitLinkInstance)m);
@@ -295,7 +204,7 @@ namespace RuleOne
 
 			return pointInTargetTransform;
 		}
-		public static void PrintResults(string headline, HashSet<Element> elList)
+		public static void PrintResults(string headline, List<Element> elList)
 		{
 			string info = "";
 			string name = "";
@@ -312,11 +221,11 @@ namespace RuleOne
 			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
 							+ Environment.NewLine + info + Environment.NewLine);
 		}
-		public static bool AssertFrireWall(Element el)
+		public static bool IsFireRatedWall(Element element)
 		{
 			try
 			{
-				if (el is Wall wall)
+				if (element is Wall wall)
 				{
 					//check Interior
 					if (wall.WallType.Function.ToString() == "Interior" || wall.WallType.Function.ToString() != "Exterior")
@@ -333,7 +242,7 @@ namespace RuleOne
 							{
 								return false;
 							}
-							foreach (string str in optionList)
+							foreach (string str in fireRatedNameOptions)
 							{
 								if (wall.Name.ToLower().Contains(str.ToLower()))
 								{
@@ -470,7 +379,7 @@ namespace RuleOne
 				.ToList();
 			try
 			{
-				Solid faceSolid = CreateSolidFromVerticesWithCurveLoop((double)1 / 12, vertices, wallPlanarFace.FaceNormal,
+				Solid faceSolid = CreateSolidFromVerticesWithCurveLoop(ONE_INCH_BUFFER, vertices, wallPlanarFace.FaceNormal,
 					wallPlanarFace.GetEdgesAsCurveLoops(), linkedInstance);
 				return faceSolid;
 			}
@@ -484,7 +393,7 @@ namespace RuleOne
 		public static Solid TurnElToSolid(Element el, Transform linkedTransform)
 		{
 			Solid solid = null;
-			int largestVol = 0;
+			double largestVol = 0;
 
 			try
 			{
@@ -497,6 +406,7 @@ namespace RuleOne
 					if (s.Volume > largestVol)
 					{
 						solid = s;
+						largestVol = s.Volume;
 					}
 				}
 			}
@@ -583,19 +493,19 @@ namespace RuleOne
 			}
 			return normalFaces;
 		}
-		public static void PaintSolid(Document doc, Solid s, double value)
+		public static void PaintSolid(Document activeDocument, Solid s, double value)
 		{
 			int schemaId = -1;
 			var rnd = new Random();
 
-			View view = doc.ActiveView;
+			View view = activeDocument.ActiveView;
 
-			using (Transaction transaction = new Transaction(doc))
+			using (Transaction transaction = new Transaction(activeDocument))
 			{
 				if (transaction.Start("Create model curves") == TransactionStatus.Started)
 				{
 					if (view.AnalysisDisplayStyleId == ElementId.InvalidElementId)
-						CreateAVFDisplayStyle(doc, view);
+						CreateAVFDisplayStyle(activeDocument, view);
 
 					SpatialFieldManager sfm = SpatialFieldManager.GetSpatialFieldManager(view);
 					if (null == sfm)
