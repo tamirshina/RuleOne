@@ -1,14 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using Autodesk.Revit.DB;
-using Autodesk.Revit.DB.Mechanical;
-using Autodesk.Revit.UI;
 
 namespace RuleOne
 {
-	public static class Lists
-    {
+	public static class Constants
+	{
+		public const int NO_CHANGE_BUFFER = 1;
+		public static readonly double EIGHT_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(8d, DisplayUnitType.DUT_DECIMAL_INCHES);
+		public static readonly double SIX_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(6d, DisplayUnitType.DUT_DECIMAL_INCHES);
+		public static readonly double FOUR_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(4d, DisplayUnitType.DUT_DECIMAL_INCHES);
 		public static List<String> ExceptionFound = new List<string>();
 
 		public static List<BuiltInCategory> allCatagories = new List<BuiltInCategory>();

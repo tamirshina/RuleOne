@@ -4,8 +4,6 @@ using System.Linq;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
-using static RuleOne.Helper;
-using static RuleOne.Lists;
 
 namespace RuleOne
 {
@@ -14,11 +12,6 @@ namespace RuleOne
     [Regeneration(RegenerationOption.Manual)]
     public class VerifyFireDumperInPlace : IExternalCommand
     {
-		private const int NO_CHANGE_BUFFER = 1;
-		private readonly double EIGHT_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(8d, DisplayUnitType.DUT_DECIMAL_INCHES);
-		private readonly double SIX_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(6d, DisplayUnitType.DUT_DECIMAL_INCHES);
-		private readonly double FOUR_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(4d, DisplayUnitType.DUT_DECIMAL_INCHES);
-
 		public Result Execute(ExternalCommandData revit, ref string message, ElementSet elements)
         {
 
@@ -29,70 +22,17 @@ namespace RuleOne
 
 			return Result.Succeeded;
         }
-		public void MainExecution(Document activeDocument)
+		private void MainExecution(Document activeDocument)
 		{
             List <Model> allModels  = GetAllModels(activeDocument);
-			List<Element> ducts = GetHorizontalDucts(allModels.Where(m => m.isMep));
+			List<Element> ducts = ExecutionHelper.GetHorizontalDucts(allModels.Where(m => m.isMep));
 
-			List<Element> whereIsFireDumper = CheckIsMissingFireDumper(activeDocument, ducts.Where(d => !AssertFireDumper(d)), allModels);
+			List<Element> whereIsFireDumper = IntersectionHelper.CheckIsMissingFireDumper(activeDocument, ducts.Where(d => !IdentificationHelper.IsFireDumper(d)), allModels);
 
 			PrintResults("whereIsFD", whereIsFireDumper);
 			PrintExceptions();
-			ClearLists(); 		
+			ClearConstants(); 		
         }
-
-        private List<Element> CheckIsMissingFireDumper(Document activeDocument, IEnumerable<Element> ducts, List<Model> allModels)
-        {
-			List<ResultType> missingFireDumper = new List<ResultType>();  
-			try
-			{
-				foreach (Element duct in ducts)
-				{
-					foreach (Element ele in GetIntesectingElementsWithBoundingBox(activeDocument, duct, allModels))
-					{
-						if (IsFireRatedWall(ele))
-						{
-							if (!IsFireDumperInIntersection(activeDocument, duct, ele, allModels))
-							{
-								missingFireDumper.Add(new ResultType (ele, duct));								
-							}
-						}
-						else if (IsMetalBeam(ele))
-						{
-							if (IsMetalBeamIntersectsFireRatedWall(activeDocument, ele, allModels))
-							{
-								if (!IsFireDumperInPlace(activeDocument, duct, allModels))
-								{
-									missingFireDumper.Add(new ResultType(ele, duct));
-								}
-							}
-						}
-					}
-				}
-			}
-			catch (Exception exc)
-			{
-				ExceptionFound.Add(exc.ToString());
-			}
-			
-			return removeDuplicates(missingFireDumper);
-		}
-		private List<Element> removeDuplicates(List<ResultType> results)
-		{
-			HashSet<Element> noDuplicates = new HashSet<Element>();
-			List<Element> wallsAndBeams = results.Select(w => w.FireWallOrMetalBeam).ToList();
-
-			foreach (Element e in wallsAndBeams)
-			{
-				if (CheckDuplicates(e, noDuplicates))
-				{
-					noDuplicates.Add(e); 
-				}
-			}
-
-			return noDuplicates.ToList();
-		}
-
 		private List<Model> GetAllModels(Document activeDocument)
         {
 			List<Model> models = new List<Model>();
@@ -108,158 +48,34 @@ namespace RuleOne
 			return models;
 			throw new NotImplementedException();
         }
-
-        private bool IsFireDumperInPlace(Document activeDocument, Element duct, List<Model> allModels)
-        {
-			try
-			{
-				Model ductModel = allModels.Single(m => m.doc.Title == duct.Document.Title);
-				Solid ductSolid = TurnElToSolid(duct, ductModel.transform);
-                foreach (var _ in GetIntesectingElementsBySolid(ref ductSolid, allModels).Where(e => AssertFireDumper(e)))
-                {
-                    return true;
-                }
-            }
-			catch (Exception exc)
-			{
-				ExceptionFound.Add(exc.ToString());
-			}
-			return false;
-        }
-		public bool IsMetalBeamIntersectsFireRatedWall(Document activeDocument, Element structuralBeam, List<Model> allModels)
+		private static void PrintExceptions()
 		{
-			try
+			string exInfo = "";
+			foreach (string str in Constants.ExceptionFound)
 			{
-				Model structuralBeamModel = allModels.Single(m => m.doc.Title == structuralBeam.Document.Title);
-				Solid beamSolid = TurnElToSolid(structuralBeam, structuralBeamModel.transform);
-				PlanarFace face = GetBottomFace(beamSolid);
-				List<XYZ> vertices = GetVerticesFromPlanarFace(face, NO_CHANGE_BUFFER);
-				Solid faceSolid = CreateSolidFromVertices(FOUR_INCH_BUFFER, vertices, -XYZ.BasisZ);
-                foreach (var _ in GetIntesectingElementsBySolid(ref faceSolid, allModels).Where(ele => IsFireRatedWall(ele)))
-                {
-                    return true;
-                }
-
-                return false;
+				exInfo += str + " " + Environment.NewLine + Environment.NewLine;
 			}
-			catch (Exception exc)
-			{
-				ExceptionFound.Add(exc.ToString());
-				return false;
-			}
+			TaskDialog.Show("revit", "count: " + Constants.ExceptionFound.Count() + Environment.NewLine + exInfo);
 		}
-		public PlanarFace GetBottomFace(Solid solid)
+		private static void ClearConstants()
 		{
-			PlanarFace planarFace =null;
-			foreach (Face face in solid.Faces)
-			{
-				if (face is PlanarFace planar)
-				{
-					if (planar.FaceNormal.IsAlmostEqualTo(-XYZ.BasisZ))
-					{
-						planarFace = planar;
-					}
-				}
-			}
-			return planarFace;
-
+			Constants.ExceptionFound.Clear();
 		}
-		public bool IsFireDumperInIntersection(Document activeDocument, Element duct, Element wallAsElement, List<Model> allModels)
+		private static void PrintResults(string headline, List<Element> elList)
 		{
-			Model ductModel = allModels.Single(m => m.doc.Title == duct.Document.Title);
-			Transform mepTransform = ductModel.transform;
-			Solid ductSolid = TurnElToSolid(duct, mepTransform);
-			RevitLinkInstance linkedInstance = GetRevitLinkedInstance(activeDocument, wallAsElement.Document.Title); 
-			Wall wall = wallAsElement as Wall;
-			List<Face> wallNormalFaces = FindWallNormalFace(wall);
-			bool isFD = false;
-			Solid intersectionSolid = null;
-			try
+			string info = "";
+			foreach (Element duct in elList)
 			{
-				foreach (Face wallFace in wallNormalFaces)
+				if (duct != null)
 				{
-					try
-					{	
-						Solid wallFaceSolid = TurnWallFaceToSolid(wallFace, linkedInstance);
-						intersectionSolid = BooleanOperationsUtils.ExecuteBooleanOperation(wallFaceSolid, ductSolid, BooleanOperationsType.Intersect);
-					}
-					catch (Exception exc)
-					{
-						ExceptionFound.Add(exc.ToString() + " " + duct.Id.ToString());
-						if (CheckIsFDWithScaledBB(activeDocument, duct, allModels))
-						{
-							return true;
-						}
-						else { return false; }						
-					}
-
-					if (intersectionSolid.Volume > 0)
-					{
-						PlanarFace solidPlanarFace = GetIntersectionSolidRightFace(intersectionSolid, wallFace);
-						if (solidPlanarFace != null)
-						{
-							Solid finalSolid = CreateSolidFromVertices((double)(EIGHT_INCH_BUFFER + wall.Width),
-								GetVerticesFromPlanarFace(solidPlanarFace, (int)FOUR_INCH_BUFFER), solidPlanarFace.FaceNormal.Negate());
-
-							Solid finalSolidInLinkedModel = TransformSolid(linkedInstance.GetTransform(), Transform.Identity, finalSolid);
-							
-							FilteredElementCollector collector = new FilteredElementCollector(GetDocument(activeDocument, "MEP"));
-
-							collector.WherePasses(new ElementIntersectsSolidFilter(finalSolidInLinkedModel));
-
-							foreach (Element element in collector)
-							{
-								if (AssertFireDumper(element))
-								{
-									isFD = true;
-									return true;
-								}
-							}
-							if (!isFD)
-							{
-								return false;
-							}
-							break;
-						}
-						else
-						{
-							if (CheckIsFDWithScaledBB(activeDocument, duct, allModels))
-							{
-								return true;
-							}
-							else { return false; }
-						}
-					}
+					string name = duct.Name;
+					info += name + " " + duct.Id + "  " + "catagory" + " " + (BuiltInCategory)duct.Category.Id.IntegerValue + Environment.NewLine;
 				}
-				return false;
+
 			}
-			catch (Exception exc)
-			{
-				ExceptionFound.Add(exc.ToString() + " " + duct.Id.ToString());
-				return false;
-			}
+			TaskDialog.Show("revit", "Count: " + elList.Count() + Environment.NewLine + headline + "-"
+							+ Environment.NewLine + info + Environment.NewLine);
 		}
-        private bool CheckIsFDWithScaledBB(Document activeDocument, Element el, List<Model> allModels)
-        {
-			var buffer = new XYZ(SIX_INCH_BUFFER, SIX_INCH_BUFFER, SIX_INCH_BUFFER);
-			try
-			{
-				foreach(Element ele in GetIntesectingDuctAccessory(activeDocument, el, buffer, allModels))
-				{
-					if (AssertFireDumper(ele))
-					{
-						return true;
-					}
-				}
-			}
-			catch (Exception exc)
-			{
-				ExceptionFound.Add(exc.ToString());
-			}
-			return false;
-        }
-
-        
 
 	}
 }
