@@ -19,30 +19,27 @@ namespace RuleOne
 			{
 				if (element is Wall wall)
 				{
-					if (wall.WallType.Function.ToString() == "Interior" || wall.WallType.Function.ToString() != "Exterior")
+					String fireRating = wall.WallType.get_Parameter(BuiltInParameter.DOOR_FIRE_RATING).AsString();
+
+					if (IsNotExterior(wall) && !string.IsNullOrEmpty(fireRating) && fireRating != "DO NOT USE")
 					{
-						if (!String.IsNullOrEmpty(wall.WallType.get_Parameter(BuiltInParameter.DOOR_FIRE_RATING).AsString()) &&
-							  wall.WallType.get_Parameter(BuiltInParameter.DOOR_FIRE_RATING).AsString() != "DO NOT USE")
+						return true;
+					}
+					else
+					{
+						if (fireRating == "DO NOT USE")
 						{
-							return true;
-						}
-						else
-						{
-							if (wall.WallType.get_Parameter(BuiltInParameter.DOOR_FIRE_RATING).AsString() == "DO NOT USE")
-							{
-								return false;
-							}
-							foreach (string str in Constants.fireRatedNameOptions)
-							{
-								if (wall.Name.ToLower().Contains(str.ToLower()))
-								{
-									return true;
-								}
-							}
 							return false;
 						}
+						foreach (string str in Constants.fireRatedNameOptions)
+						{
+							if (wall.Name.ToLower().Contains(str.ToLower()))
+							{
+								return true;
+							}
+						}
+						return false;
 					}
-					else { return false; }
 				}
 				else { return false; }
 			}
@@ -51,6 +48,12 @@ namespace RuleOne
 				Constants.ExceptionFound.Add(exc.ToString());
 				return false;
 			}
+		}
+		private static bool IsNotExterior(Wall wall)
+		{
+
+			return wall.WallType.Function.ToString() == "Interior" || wall.WallType.Function.ToString() != "Exterior";
+
 		}
 		public static bool IsFireDumper(Element e)
 		{

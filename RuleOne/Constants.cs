@@ -6,6 +6,7 @@ namespace RuleOne
 {
 	public static class Constants
 	{
+		public static int tamir = 1; 
 		public const int NO_CHANGE_BUFFER = 1;
 		public static readonly double EIGHT_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(8d, DisplayUnitType.DUT_DECIMAL_INCHES);
 		public static readonly double SIX_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(6d, DisplayUnitType.DUT_DECIMAL_INCHES);

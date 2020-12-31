@@ -115,12 +115,17 @@ namespace RuleOne
 			try
 			{
 				Model structuralBeamModel = allModels.Single(m => m.doc.Title == structuralBeam.Document.Title);
-				Solid beamSolid = SolidHelper.TurnElementToItsLargestSolid(structuralBeam, structuralBeamModel.transform);
-				PlanarFace face = ExecutionHelper.GetBottomFace(beamSolid);
-				List<XYZ> vertices = ExecutionHelper.getPlanarFaceVertices(face, Constants.NO_CHANGE_BUFFER);
-				Solid faceSolid = SolidHelper.CreateSolidFromVertices(Constants.FOUR_INCH_BUFFER, vertices, -XYZ.BasisZ, activeDocument);
+				if (GetIntesectingElementsWithBoundingBox(activeDocument, structuralBeam, allModels).Where(e => IdentificationHelper.IsFireRatedWall(e)).Any())
+				{
+					Solid beamSolid = SolidHelper.TurnElementToItsLargestSolid(structuralBeam, structuralBeamModel.transform);
+					PlanarFace face = ExecutionHelper.GetBottomFace(beamSolid);
+					List<XYZ> vertices = ExecutionHelper.getPlanarFaceVertices(face, Constants.NO_CHANGE_BUFFER);
+					Solid faceSolid = SolidHelper.CreateSolidFromVertices(Constants.FOUR_INCH_BUFFER, vertices, -XYZ.BasisZ);
 
-				return GetIntesectingElementsBySolid(ref faceSolid, allModels).Any(ele => IdentificationHelper.IsFireRatedWall(ele));
+					return GetIntesectingElementsBySolid(ref faceSolid, allModels).Any(ele => IdentificationHelper.IsFireRatedWall(ele));
+				}
+				return false;
+
 			}
 			catch (Exception exc)
 			{

@@ -30,10 +30,10 @@ namespace RuleOne
 		}
 		public static List<Element> CheckIsMissingFireDumper(Document activeDocument, IEnumerable<Element> ducts, List<Model> allModels)
 		{
-			List<ResultType> missingFireDumper = new List<ResultType>();
+			List<ResultType> missingFireDumpers = new List<ResultType>();
 			try
 			{
-				missingFireDumper = ducts.SelectMany(d =>
+				missingFireDumpers = ducts.SelectMany(d =>
 				IntersectionHelper.GetIntesectingElementsWithBoundingBox(activeDocument, d, allModels)
 						   .Where(i => IsMissingFireDumper(d, i, activeDocument, allModels))
 						   .Select(x => new ResultType(x, d))
@@ -44,13 +44,12 @@ namespace RuleOne
 				Constants.ExceptionFound.Add(exc.ToString());
 			}
 
-			return ExecutionHelper.removeDuplicates(missingFireDumper);
+			return ExecutionHelper.removeDuplicates(missingFireDumpers);
 		}
 		public static bool IsFireDumperInIntersection(Document activeDocument, Element duct, Element wallAsElement, List<Model> allModels)
 		{
 			Model ductModel = allModels.Single(m => m.doc.Title == duct.Document.Title);
-			Transform mepTransform = ductModel.transform;
-			Solid ductSolid = SolidHelper.TurnElementToItsLargestSolid(duct, mepTransform);
+			Solid ductSolid = SolidHelper.TurnElementToItsLargestSolid(duct, ductModel.transform);
 			RevitLinkInstance linkedInstance = ExecutionHelper.GetRevitLinkedInstance(activeDocument, wallAsElement.Document.Title);
 			Wall wall = wallAsElement as Wall;
 			List<Face> wallSideFaces = ExecutionHelper.getWallSideFaces(wall);
@@ -86,7 +85,7 @@ namespace RuleOne
 			if (planarFace != null)
 			{
 				Solid increasedSolid = SolidHelper.CreateSolidFromVertices((double)(Constants.EIGHT_INCH_BUFFER + wall.Width),
-					ExecutionHelper.getPlanarFaceVertices(planarFace, (int)Constants.FOUR_INCH_BUFFER), planarFace.FaceNormal.Negate(), activeDocument);
+					ExecutionHelper.getPlanarFaceVertices(planarFace, (int)Constants.FOUR_INCH_BUFFER), planarFace.FaceNormal.Negate());
 
 				return allModels.Where(m => m.isMep).Any(m => IsFireDumperIntersectsIncreasedSolid(m, linkedInstance, increasedSolid));
 			}

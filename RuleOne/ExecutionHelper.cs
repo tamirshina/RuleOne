@@ -104,7 +104,7 @@ namespace RuleOne
 			opt.ComputeReferences = true;
 			opt.DetailLevel = ViewDetailLevel.Fine;
 			var geometryElement = wall.get_Geometry(new Options());
-			var solids = geometryElement.Where(o => o is Solid);
+            var solids = geometryElement.Where(o => o is Solid).Select(s => s as Solid);
 
 			foreach (Solid solid in solids)
 			{
@@ -143,7 +143,6 @@ namespace RuleOne
 					noDuplicates.Add(e);
 				}
 			}
-
 			return noDuplicates.ToList();
 		}
 	}

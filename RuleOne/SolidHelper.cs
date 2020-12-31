@@ -12,7 +12,7 @@ namespace RuleOne
     public static class SolidHelper
     {
 		private static double ONE_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(1d, DisplayUnitType.DUT_DECIMAL_INCHES);
-		public static Solid CreateSolidFromVertices(double height, List<XYZ> vertices, XYZ direction, Document activeDocument)
+		public static Solid CreateSolidFromVertices(double Width, List<XYZ> vertices, XYZ direction)
 		{
 			try
 			{
@@ -27,9 +27,8 @@ namespace RuleOne
 				{
 					baseLoop
 				};
-				Solid solid = GeometryCreationUtilities.CreateExtrusionGeometry(loopList, direction, height);
-
-				//PaintSolid(activeDocument, solid, 1.0);
+				Solid solid = GeometryCreationUtilities.CreateExtrusionGeometry(loopList, direction, Width);
+				
 				return solid;
 			}
 
