@@ -64,7 +64,6 @@ namespace RuleOne
 				return false;
 			}
 		}
-
 		private static bool IsFireDumperInPalce(Document activeDocument, List<Model> allModels, Element duct, Face wallFace, RevitLinkInstance linkedInstance, Solid ductSolid, Wall wall)
 		{
 			Solid intersectionSolid = IntersectionHelper.GetIntersectionSolid(duct, wallFace, linkedInstance, ductSolid);

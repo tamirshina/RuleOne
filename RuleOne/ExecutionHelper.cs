@@ -50,21 +50,26 @@ namespace RuleOne
 			}
 			return true;
 		}
-		public static PlanarFace GetBottomFace(Solid solid)
+		public static List<PlanarFace> GetBottomFaces(Solid solid)
 		{
-			PlanarFace planarFace = null;
-			foreach (Face face in solid.Faces)
+			try
 			{
-				if (face is PlanarFace planar)
+				List<PlanarFace> planarFaces = new List<PlanarFace>();
+
+				foreach (Face face in solid.Faces)
 				{
-					if (planar.FaceNormal.IsAlmostEqualTo(-XYZ.BasisZ))
+					if (face is PlanarFace planar && DirectionUtils.VectorDirectionDownwards(planar.FaceNormal))
 					{
-						planarFace = planar;
+						planarFaces.Add(planar);
 					}
 				}
+				return planarFaces;
 			}
-			return planarFace;
-
+			catch (Exception exc)
+			{
+				Constants.ExceptionFound.Add(exc.ToString());
+				return null;
+			}
 		}
 		public static RevitLinkInstance GetRevitLinkedInstance(Document activeDocument, string target)
 		{

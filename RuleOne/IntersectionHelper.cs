@@ -97,11 +97,11 @@ namespace RuleOne
 
 						List<Element> intersectsList = collector.WherePasses(filter).WherePasses(new ElementMulticategoryFilter(Constants.intersectionElementsCatagories)).ToList();
 
-						foreach (Element intersectionEl in intersectsList)
-						{
-							elementList.Add(intersectionEl);
-						}
-					}
+                        foreach (Element intersectionEl in intersectsList)
+                        {
+                            elementList.Add(intersectionEl);
+                        }
+                    }
 				}
 				catch (Exception exc)
 				{
@@ -118,14 +118,20 @@ namespace RuleOne
 				if (GetIntesectingElementsWithBoundingBox(activeDocument, structuralBeam, allModels).Where(e => IdentificationHelper.IsFireRatedWall(e)).Any())
 				{
 					Solid beamSolid = SolidHelper.TurnElementToItsLargestSolid(structuralBeam, structuralBeamModel.transform);
-					PlanarFace face = ExecutionHelper.GetBottomFace(beamSolid);
-					List<XYZ> vertices = ExecutionHelper.getPlanarFaceVertices(face, Constants.NO_CHANGE_BUFFER);
-					Solid faceSolid = SolidHelper.CreateSolidFromVertices(Constants.FOUR_INCH_BUFFER, vertices, -XYZ.BasisZ);
+                    List<PlanarFace> bottomFaces = ExecutionHelper.GetBottomFaces(beamSolid);
 
-					return GetIntesectingElementsBySolid(ref faceSolid, allModels).Any(ele => IdentificationHelper.IsFireRatedWall(ele));
+					foreach (PlanarFace face in bottomFaces)
+					{
+						List<XYZ> vertices = ExecutionHelper.getPlanarFaceVertices(face, Constants.NO_CHANGE_BUFFER);
+						Solid faceSolid = SolidHelper.CreateSolidFromVertices(Constants.FOUR_INCH_BUFFER, vertices, -XYZ.BasisZ);
+
+						if (GetIntesectingElementsBySolid(ref faceSolid, allModels).Any(ele => IdentificationHelper.IsFireRatedWall(ele)))
+						{
+							return true;
+						}						
+					}
 				}
 				return false;
-
 			}
 			catch (Exception exc)
 			{
