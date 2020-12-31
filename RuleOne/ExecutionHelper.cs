@@ -105,7 +105,6 @@ namespace RuleOne
 			opt.DetailLevel = ViewDetailLevel.Fine;
 			var geometryElement = wall.get_Geometry(new Options());
 			var solids = geometryElement.Where(o => o is Solid);
-			//GeometryElement e = wall.get_Geometry(opt);
 
 			foreach (Solid solid in solids)
 			{

@@ -12,7 +12,7 @@ namespace RuleOne
     public static class SolidHelper
     {
 		private static double ONE_INCH_BUFFER = UnitUtils.ConvertToInternalUnits(1d, DisplayUnitType.DUT_DECIMAL_INCHES);
-		public static Solid CreateSolidFromVertices(double height, List<XYZ> vertices, XYZ direction)
+		public static Solid CreateSolidFromVertices(double height, List<XYZ> vertices, XYZ direction, Document activeDocument)
 		{
 			try
 			{
@@ -27,10 +27,10 @@ namespace RuleOne
 				{
 					baseLoop
 				};
-				Solid preTransformBox = GeometryCreationUtilities.CreateExtrusionGeometry(loopList, direction,
-																						  height);
-				Solid transformBox = SolidUtils.CreateTransformed(preTransformBox, Transform.Identity);
-				return transformBox;
+				Solid solid = GeometryCreationUtilities.CreateExtrusionGeometry(loopList, direction, height);
+
+				//PaintSolid(activeDocument, solid, 1.0);
+				return solid;
 			}
 
 			catch (Exception exc)

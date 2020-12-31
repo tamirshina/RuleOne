@@ -27,7 +27,7 @@ namespace RuleOne
             List <Model> allModels  = GetAllModels(activeDocument);
 			List<Element> ducts = ExecutionHelper.GetHorizontalDucts(allModels.Where(m => m.isMep));
 
-			List<Element> whereIsFireDumper = IntersectionHelper.CheckIsMissingFireDumper(activeDocument, ducts.Where(d => !IdentificationHelper.IsFireDumper(d)), allModels);
+			List<Element> whereIsFireDumper = FireDumperFinder.CheckIsMissingFireDumper(activeDocument, ducts.Where(d => !IdentificationHelper.IsFireDumper(d)), allModels);
 
 			PrintResults("whereIsFD", whereIsFireDumper);
 			PrintExceptions();
